@@ -1,6 +1,18 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { resolveFeedUrl } from "./resolve-feed-url"
+import { extractChannelId, resolveFeedUrl } from "./resolve-feed-url"
+
+describe("extractChannelId", () => {
+  it("prefers the canonical channel over a sister channelId in the page", () => {
+    const html = `
+      <a href="/channel/UCzpCc5n9hqiVC7HhPwcIKEg">Good Mythical MORE</a>
+      "channelId":"UCzpCc5n9hqiVC7HhPwcIKEg"
+      <link rel="canonical" href="https://www.youtube.com/channel/UC4PooiX37Pld1T8J5SYT-SQ">
+      "channelId":"UC4PooiX37Pld1T8J5SYT-SQ"
+    `
+    assert.equal(extractChannelId(html), "UC4PooiX37Pld1T8J5SYT-SQ")
+  })
+})
 
 describe("resolveFeedUrl", () => {
   it("passes through a normal feed URL", async () => {
@@ -26,8 +38,13 @@ describe("resolveFeedUrl", () => {
     assert.equal(out.url, feed)
   })
 
-  it("resolves a @handle page to the uploads feed", async () => {
-    const out = await resolveFeedUrl("https://www.youtube.com/@GoogleDevelopers")
-    assert.match(out.url, /feeds\/videos\.xml\?channel_id=UC/)
+  it("resolves @goodmythicalmorning to Good Mythical Morning, not More", async () => {
+    const out = await resolveFeedUrl(
+      "https://www.youtube.com/@goodmythicalmorning"
+    )
+    assert.equal(
+      out.url,
+      "https://www.youtube.com/feeds/videos.xml?channel_id=UC4PooiX37Pld1T8J5SYT-SQ"
+    )
   })
 })

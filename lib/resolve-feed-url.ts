@@ -4,6 +4,7 @@
  */
 
 const YT_FEED = "https://www.youtube.com/feeds/videos.xml"
+const CHANNEL_ID = "UC[\\w-]{20,}"
 
 export type ResolveResult = {
   url: string
@@ -14,17 +15,36 @@ function youtubeFeedFromChannelId(channelId: string): string {
   return `${YT_FEED}?channel_id=${encodeURIComponent(channelId)}`
 }
 
-function extractChannelId(html: string): string | null {
+/**
+ * Prefer page identity markers. A naive first `"channelId"` match often
+ * hits a linked/sister channel (e.g. Good Mythical More on the GMM page).
+ */
+export function extractChannelId(html: string): string | null {
   const patterns = [
-    /"channelId":"(UC[\w-]{20,})"/,
-    /"externalId":"(UC[\w-]{20,})"/,
-    /channel_id=(UC[\w-]{20,})/,
-    /\/channel\/(UC[\w-]{20,})/,
-    /<meta\s+itemprop="channelId"\s+content="(UC[\w-]{20,})"/i,
+    // Own channel on the page
+    new RegExp(
+      `<link\\s+rel=["']canonical["']\\s+href=["']https://www\\.youtube\\.com/channel/(${CHANNEL_ID})["']`,
+      "i"
+    ),
+    new RegExp(
+      `<meta\\s+itemprop=["']channelId["']\\s+content=["'](${CHANNEL_ID})["']`,
+      "i"
+    ),
+    new RegExp(
+      `"vanityChannelUrl"\\s*:\\s*"https?://www\\.youtube\\.com/@[^"]+"[\\s\\S]{0,200}?"(externalId|channelId)"\\s*:\\s*"(${CHANNEL_ID})"`,
+      "i"
+    ),
+    // Narrow JSON identity fields (still before generic channelId)
+    new RegExp(`"externalId"\\s*:\\s*"(${CHANNEL_ID})"`),
+    new RegExp(`"channelId"\\s*:\\s*"(${CHANNEL_ID})"`),
   ]
+
   for (const pattern of patterns) {
     const match = html.match(pattern)
-    if (match?.[1]) return match[1]
+    if (!match) continue
+    // vanityChannelUrl pattern has id in group 2
+    const id = match[2] && match[2].startsWith("UC") ? match[2] : match[1]
+    if (id?.startsWith("UC")) return id
   }
   return null
 }
@@ -33,8 +53,9 @@ async function resolveYouTubePage(pageUrl: string): Promise<ResolveResult> {
   const res = await fetch(pageUrl, {
     headers: {
       "User-Agent":
-        "CurrentsRSS/1.0 (+https://localhost; personal reader)",
+        "Mozilla/5.0 (compatible; CurrentsRSS/1.0; +https://localhost)",
       Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
     },
     redirect: "follow",
     signal: AbortSignal.timeout(12_000),
@@ -73,11 +94,16 @@ export async function resolveFeedUrl(raw: string): Promise<ResolveResult> {
 
   if (host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be") {
     // Already the official uploads feed
-    if (parsed.pathname === "/feeds/videos.xml" && parsed.searchParams.get("channel_id")) {
+    if (
+      parsed.pathname === "/feeds/videos.xml" &&
+      parsed.searchParams.get("channel_id")
+    ) {
       return { url: parsed.toString(), label: "YouTube uploads" }
     }
 
-    const channelMatch = parsed.pathname.match(/^\/channel\/(UC[\w-]{20,})\/?$/)
+    const channelMatch = parsed.pathname.match(
+      new RegExp(`^/channel/(${CHANNEL_ID})/?$`)
+    )
     if (channelMatch) {
       return {
         url: youtubeFeedFromChannelId(channelMatch[1]),
@@ -93,10 +119,14 @@ export async function resolveFeedUrl(raw: string): Promise<ResolveResult> {
       parsed.pathname.startsWith("/channel/") ||
       parsed.pathname === "/watch"
     ) {
+      // Strip /videos, /featured, etc. so we hit the channel root
+      const handleRoot = parsed.pathname.match(/^(\/@[^/]+)/)
       const page =
         parsed.pathname === "/watch"
           ? `https://www.youtube.com/watch?v=${parsed.searchParams.get("v") || ""}`
-          : `https://www.youtube.com${parsed.pathname}`
+          : handleRoot
+            ? `https://www.youtube.com${handleRoot[1]}`
+            : `https://www.youtube.com${parsed.pathname}`
       return resolveYouTubePage(page)
     }
   }
