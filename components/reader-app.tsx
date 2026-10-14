@@ -313,6 +313,9 @@ export function ReaderApp() {
         ? twitchLiveItems
         : allItems.filter((item) => item.feedId === activeFeedId)
 
+  const loading = status === "loading" || isPending
+  const liveCount = twitchLiveItems.length
+
   const showTwitchSection =
     activeFeedId === "all" &&
     twitchFeeds.length > 0 &&
@@ -324,9 +327,6 @@ export function ReaderApp() {
       : activeFeedId === "twitch"
         ? twitchLiveItems
         : items
-
-  const loading = status === "loading" || isPending
-  const liveCount = twitchLiveItems.length
 
   return (
     <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-5 pb-20 pt-8 sm:px-8 lg:px-10">
