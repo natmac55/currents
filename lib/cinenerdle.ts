@@ -40,10 +40,15 @@ export function cinenerdleModeFromUrl(url: string): CinenerdleMode {
   }
 }
 
+/** Canonical subscription URL — one feed covers Original + Reversal. */
+export function normalizeCinenerdleFeedUrl(): string {
+  return `${CINENERDLE_ORIGIN}/`
+}
+
 export function normalizeCinenerdleUrl(mode: CinenerdleMode): string {
   if (mode === "original") return `${CINENERDLE_ORIGIN}/puzzles/original/latest`
   if (mode === "reversal") return `${CINENERDLE_ORIGIN}/puzzles/reversal/latest`
-  return `${CINENERDLE_ORIGIN}/`
+  return normalizeCinenerdleFeedUrl()
 }
 
 function labelForMode(mode: CinenerdleMode): string {

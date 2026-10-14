@@ -5,9 +5,8 @@
  */
 
 import {
-  cinenerdleModeFromUrl,
   isCinenerdleUrl,
-  normalizeCinenerdleUrl,
+  normalizeCinenerdleFeedUrl,
 } from "@/lib/cinenerdle"
 import {
   CONNECTIONS_PAGE_URL,
@@ -120,15 +119,10 @@ export async function resolveFeedUrl(raw: string): Promise<ResolveResult> {
   }
 
   if (isCinenerdleUrl(parsed.toString())) {
-    const mode = cinenerdleModeFromUrl(parsed.toString())
+    // Original and Reversal share one subscription (both puzzle types).
     return {
-      url: normalizeCinenerdleUrl(mode),
-      label:
-        mode === "original"
-          ? "CineNerdle Original"
-          : mode === "reversal"
-            ? "CineNerdle Reversal"
-            : "CineNerdle",
+      url: normalizeCinenerdleFeedUrl(),
+      label: "CineNerdle",
     }
   }
 

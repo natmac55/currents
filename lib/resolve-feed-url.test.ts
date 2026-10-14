@@ -53,4 +53,17 @@ describe("resolveFeedUrl", () => {
     assert.equal(out.url, "https://www.twitch.tv/shroud")
     assert.equal(out.label, "Twitch · shroud")
   })
+
+  it("combines any CineNerdle URL into one Original+Reversal feed", async () => {
+    const original = await resolveFeedUrl(
+      "https://www.cinenerdle.app/puzzles/original/1442"
+    )
+    const reversal = await resolveFeedUrl(
+      "https://www.cinenerdle.app/puzzles/reversal/R1245"
+    )
+    assert.equal(original.url, "https://www.cinenerdle.app/")
+    assert.equal(reversal.url, "https://www.cinenerdle.app/")
+    assert.equal(original.label, "CineNerdle")
+    assert.equal(reversal.label, "CineNerdle")
+  })
 })

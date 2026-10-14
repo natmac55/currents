@@ -1,5 +1,9 @@
 "use client"
 
+import {
+  isCinenerdleUrl,
+  normalizeCinenerdleFeedUrl,
+} from "@/lib/cinenerdle"
 import { DEFAULT_FEEDS, STORAGE_KEY } from "@/lib/defaults"
 import { makeFeedId } from "@/lib/feed-id"
 import type { FeedSource } from "@/lib/types"
@@ -11,12 +15,16 @@ export function migrateFeedIds(feeds: FeedSource[]): FeedSource[] {
   const byId = new Map<string, FeedSource>()
   for (const feed of feeds) {
     if (typeof feed?.url !== "string" || feed.url.length === 0) continue
-    const id = makeFeedId(feed.url)
+    // Collapse Original/Reversal/home into one combined Cinenerdle feed.
+    const url = isCinenerdleUrl(feed.url)
+      ? normalizeCinenerdleFeedUrl()
+      : feed.url
+    const id = makeFeedId(url)
     if (byId.has(id)) continue
     byId.set(id, {
       id,
-      url: feed.url,
-      title: feed.title,
+      url,
+      title: isCinenerdleUrl(url) ? "CineNerdle" : feed.title,
     })
   }
   return [...byId.values()]

@@ -38,7 +38,7 @@ Twitch channels are grouped in the sidebar under **Twitch**, with an **All live*
 Most daily puzzles don’t publish RSS. Currents has built-in support for:
 
 - **NYT Connections** — `https://www.nytimes.com/games/connections`
-- **CineNerdle Original / Reversal** — paste a puzzle URL (e.g. `/puzzles/original/1442` or `/puzzles/reversal/R1245`), or the site home for both
+- **CineNerdle** — paste any puzzle or site URL (Original or Reversal); one feed covers both daily types
 - **Daily Orbs** — `https://dailyorbs.com/`
 
 Items are spoiler-free (title + link). Hit Refresh for the newest day.

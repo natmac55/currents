@@ -4,6 +4,7 @@ import {
   cinenerdleItemFromOfficial,
   cinenerdleModeFromUrl,
   isCinenerdleUrl,
+  normalizeCinenerdleFeedUrl,
 } from "./cinenerdle"
 
 describe("isCinenerdleUrl", () => {
@@ -30,6 +31,12 @@ describe("cinenerdleModeFromUrl", () => {
       "reversal"
     )
     assert.equal(cinenerdleModeFromUrl("https://www.cinenerdle.app/"), "both")
+  })
+})
+
+describe("normalizeCinenerdleFeedUrl", () => {
+  it("points subscriptions at the combined feed root", () => {
+    assert.equal(normalizeCinenerdleFeedUrl(), "https://www.cinenerdle.app/")
   })
 })
 
