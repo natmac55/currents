@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  Undo2,
   Upload,
   X,
 } from "lucide-react"
@@ -83,6 +84,42 @@ function FeedNavRow({
   onSelect: () => void
   onRemove: () => void
 }) {
+  const [confirming, setConfirming] = useState(false)
+
+  if (confirming) {
+    return (
+      <div className="rounded-md border border-[var(--danger-line)] bg-[var(--danger-soft)] px-2 py-2">
+        <p className="px-1 text-xs leading-snug text-[var(--danger)]">
+          Remove{" "}
+          <span className="font-medium">{feed.title || feed.url}</span>?
+        </p>
+        <div className="mt-2 flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 flex-1 border-[var(--danger-line)] bg-transparent text-[var(--danger)] hover:bg-[var(--danger)]/10"
+            onClick={() => {
+              setConfirming(false)
+              onRemove()
+            }}
+          >
+            Remove
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 flex-1 text-[var(--ink-muted)]"
+            onClick={() => setConfirming(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -113,7 +150,7 @@ function FeedNavRow({
         size="icon-xs"
         className="opacity-60 group-hover:opacity-100"
         aria-label={`Remove ${feed.title || feed.url}`}
-        onClick={onRemove}
+        onClick={() => setConfirming(true)}
       >
         <Trash2 className="size-3.5" />
       </Button>
@@ -132,11 +169,32 @@ export function ReaderApp() {
   const [hydrated, setHydrated] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [notice, setNotice] = useState<string | null>(null)
+  const [lastRemoved, setLastRemoved] = useState<{
+    feed: FeedSource
+    index: number
+  } | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function clearRestoreTimer() {
+    if (restoreTimerRef.current) {
+      clearTimeout(restoreTimerRef.current)
+      restoreTimerRef.current = null
+    }
+  }
+
+  function scheduleRestoreExpiry() {
+    clearRestoreTimer()
+    restoreTimerRef.current = setTimeout(() => {
+      setLastRemoved(null)
+      restoreTimerRef.current = null
+    }, 12_000)
+  }
 
   useEffect(() => {
     setFeeds(loadFeeds())
     setHydrated(true)
+    return () => clearRestoreTimer()
   }, [])
 
   useEffect(() => {
@@ -187,6 +245,8 @@ export function ReaderApp() {
     event.preventDefault()
     setAddError(null)
     setNotice(null)
+    clearRestoreTimer()
+    setLastRemoved(null)
 
     const formUrl = String(new FormData(event.currentTarget).get("url") || "")
     const url = (formUrl || urlDraft).trim()
@@ -255,8 +315,34 @@ export function ReaderApp() {
   }
 
   function removeFeed(id: string) {
+    const index = feeds.findIndex((f) => f.id === id)
+    const feed = index >= 0 ? feeds[index] : null
+    if (!feed) return
     const next = feeds.filter((f) => f.id !== id)
     if (activeFeedId === id) setActiveFeedId("all")
+    setAddError(null)
+    setNotice(null)
+    setLastRemoved({ feed, index })
+    scheduleRestoreExpiry()
+    persist(next)
+  }
+
+  function restoreRemovedFeed() {
+    if (!lastRemoved) return
+    const { feed, index } = lastRemoved
+    if (feeds.some((f) => f.id === feed.id || f.url === feed.url)) {
+      clearRestoreTimer()
+      setLastRemoved(null)
+      setNotice("That feed is already back in your list.")
+      return
+    }
+    const next = [...feeds]
+    next.splice(Math.min(index, next.length), 0, feed)
+    clearRestoreTimer()
+    setLastRemoved(null)
+    setAddError(null)
+    setNotice(`Restored ${feed.title || feed.url}.`)
+    setActiveFeedId(feed.id)
     persist(next)
   }
 
@@ -400,6 +486,26 @@ export function ReaderApp() {
             />
             {addError ? (
               <p className="mt-2 text-sm text-[var(--danger)]">{addError}</p>
+            ) : lastRemoved ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--ink-muted)]">
+                <span>
+                  Removed{" "}
+                  <span className="font-medium text-[var(--ink)]">
+                    {lastRemoved.feed.title || lastRemoved.feed.url}
+                  </span>
+                  .
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-[var(--line)] bg-[var(--panel)]"
+                  onClick={restoreRemovedFeed}
+                >
+                  <Undo2 className="size-3.5" />
+                  Restore
+                </Button>
+              </div>
             ) : notice ? (
               <p className="mt-2 text-sm text-[var(--accent)]">{notice}</p>
             ) : (
