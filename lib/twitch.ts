@@ -17,6 +17,10 @@ export function isTwitchUrl(url: string): boolean {
   }
 }
 
+export function isTwitchFeedItem(item: Pick<FeedItem, "feedUrl" | "id">): boolean {
+  return item.id.startsWith("twitch:live:") || isTwitchUrl(item.feedUrl)
+}
+
 /** Extract channel login from a Twitch URL, or null if not a channel page. */
 export function twitchLoginFromUrl(url: string): string | null {
   try {

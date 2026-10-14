@@ -27,11 +27,99 @@ import {
   serializeFeedsExport,
 } from "@/lib/import-export"
 import { loadFeeds, makeFeedId, saveFeeds } from "@/lib/storage"
-import { isTwitchUrl } from "@/lib/twitch"
+import { isTwitchFeedItem, isTwitchUrl } from "@/lib/twitch"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 type Status = "idle" | "loading" | "ready" | "error"
+type ActiveView = string | "all" | "twitch"
+
+function StoryRow({ item }: { item: FeedItem }) {
+  return (
+    <li className="group py-5 first:pt-4">
+      <a
+        href={item.link}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs tracking-wide text-[var(--accent)] uppercase">
+              {item.feedTitle}
+              <span className="text-[var(--ink-faint)]">
+                {" "}
+                · {item.publishedLabel}
+              </span>
+            </p>
+            <h3 className="mt-1 font-display text-xl leading-snug text-[var(--ink)] transition-colors group-hover:text-[var(--accent)] sm:text-[1.35rem]">
+              {item.title}
+            </h3>
+            {item.summary ? (
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--ink-muted)]">
+                {item.summary}
+              </p>
+            ) : null}
+          </div>
+          <ArrowUpRight className="mt-1 size-4 shrink-0 text-[var(--ink-faint)] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+        </div>
+      </a>
+    </li>
+  )
+}
+
+function FeedNavRow({
+  feed,
+  active,
+  metaLabel,
+  failed,
+  onSelect,
+  onRemove,
+}: {
+  feed: FeedSource
+  active: boolean
+  metaLabel: string
+  failed: boolean
+  onSelect: () => void
+  onRemove: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-1 rounded-md pr-1 transition-colors",
+        active ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--panel)]"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className="min-w-0 flex-1 px-3 py-2 text-left"
+      >
+        <span
+          className={cn(
+            "block truncate text-sm",
+            active ? "font-medium text-[var(--ink)]" : "text-[var(--ink-muted)]"
+          )}
+        >
+          {feed.title || feed.url}
+        </span>
+        <span className="block truncate text-xs text-[var(--ink-faint)]">
+          {failed ? "Failed to load" : metaLabel}
+        </span>
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="opacity-60 group-hover:opacity-100"
+        aria-label={`Remove ${feed.title || feed.url}`}
+        onClick={onRemove}
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
+    </div>
+  )
+}
 
 export function ReaderApp() {
   const [feeds, setFeeds] = useState<FeedSource[]>(DEFAULT_FEEDS)
@@ -40,7 +128,7 @@ export function ReaderApp() {
   const [status, setStatus] = useState<Status>("idle")
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [data, setData] = useState<FeedFetchResult | null>(null)
-  const [activeFeedId, setActiveFeedId] = useState<string | "all">("all")
+  const [activeFeedId, setActiveFeedId] = useState<ActiveView>("all")
   const [hydrated, setHydrated] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [notice, setNotice] = useState<string | null>(null)
@@ -212,12 +300,33 @@ export function ReaderApp() {
     }
   }
 
+  const allItems = data?.items ?? []
+  const twitchFeeds = feeds.filter((f) => isTwitchUrl(f.url))
+  const otherFeeds = feeds.filter((f) => !isTwitchUrl(f.url))
+  const twitchLiveItems = allItems.filter(isTwitchFeedItem)
+  const otherItems = allItems.filter((item) => !isTwitchFeedItem(item))
+
   const items: FeedItem[] =
     activeFeedId === "all"
-      ? (data?.items ?? [])
-      : (data?.items ?? []).filter((item) => item.feedId === activeFeedId)
+      ? allItems
+      : activeFeedId === "twitch"
+        ? twitchLiveItems
+        : allItems.filter((item) => item.feedId === activeFeedId)
+
+  const showTwitchSection =
+    activeFeedId === "all" &&
+    twitchFeeds.length > 0 &&
+    (twitchLiveItems.length > 0 || !loading)
+
+  const riverItems =
+    activeFeedId === "all"
+      ? otherItems
+      : activeFeedId === "twitch"
+        ? twitchLiveItems
+        : items
 
   const loading = status === "loading" || isPending
+  const liveCount = twitchLiveItems.length
 
   return (
     <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-5 pb-20 pt-8 sm:px-8 lg:px-10">
@@ -333,59 +442,78 @@ export function ReaderApp() {
             >
               All currents
             </button>
-            {feeds.map((feed) => {
+
+            {otherFeeds.map((feed) => {
               const meta = data?.sources.find((s) => s.id === feed.id)
-              const failed = data?.errors.find((e) => e.feedId === feed.id)
+              const failed = Boolean(
+                data?.errors.find((e) => e.feedId === feed.id)
+              )
               return (
-                <div
+                <FeedNavRow
                   key={feed.id}
-                  className={cn(
-                    "group flex items-center gap-1 rounded-md pr-1 transition-colors",
-                    activeFeedId === feed.id
-                      ? "bg-[var(--accent-soft)]"
-                      : "hover:bg-[var(--panel)]"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActiveFeedId(feed.id)}
-                    className="min-w-0 flex-1 px-3 py-2 text-left"
-                  >
-                    <span
-                      className={cn(
-                        "block truncate text-sm",
-                        activeFeedId === feed.id
-                          ? "font-medium text-[var(--ink)]"
-                          : "text-[var(--ink-muted)]"
-                      )}
-                    >
-                      {meta?.title || feed.title || feed.url}
-                    </span>
-                    <span className="block truncate text-xs text-[var(--ink-faint)]">
-                      {failed
-                        ? "Failed to load"
-                        : isTwitchUrl(feed.url)
-                          ? meta
-                            ? meta.itemCount > 0
-                              ? "Live now"
-                              : "Offline"
-                            : "—"
-                          : `${meta?.itemCount ?? "—"} items`}
-                    </span>
-                  </button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="opacity-60 group-hover:opacity-100"
-                    aria-label={`Remove ${feed.title || feed.url}`}
-                    onClick={() => removeFeed(feed.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
+                  feed={{
+                    ...feed,
+                    title: meta?.title || feed.title || feed.url,
+                  }}
+                  active={activeFeedId === feed.id}
+                  metaLabel={`${meta?.itemCount ?? "—"} items`}
+                  failed={failed}
+                  onSelect={() => setActiveFeedId(feed.id)}
+                  onRemove={() => removeFeed(feed.id)}
+                />
               )
             })}
+
+            {twitchFeeds.length > 0 && (
+              <div className="pt-3">
+                <p className="mb-1 px-3 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
+                  Twitch
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveFeedId("twitch")}
+                  className={cn(
+                    "mb-1 w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                    activeFeedId === "twitch"
+                      ? "bg-[var(--accent-soft)] font-medium text-[var(--ink)]"
+                      : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
+                  )}
+                >
+                  <span className="block">All live</span>
+                  <span className="block text-xs text-[var(--ink-faint)]">
+                    {liveCount === 0
+                      ? "Nobody live"
+                      : `${liveCount} live`}
+                  </span>
+                </button>
+                {twitchFeeds.map((feed) => {
+                  const meta = data?.sources.find((s) => s.id === feed.id)
+                  const failed = Boolean(
+                    data?.errors.find((e) => e.feedId === feed.id)
+                  )
+                  return (
+                    <FeedNavRow
+                      key={feed.id}
+                      feed={{
+                        ...feed,
+                        title: meta?.title || feed.title || feed.url,
+                      }}
+                      active={activeFeedId === feed.id}
+                      metaLabel={
+                        meta
+                          ? meta.itemCount > 0
+                            ? "Live now"
+                            : "Offline"
+                          : "—"
+                      }
+                      failed={failed}
+                      onSelect={() => setActiveFeedId(feed.id)}
+                      onRemove={() => removeFeed(feed.id)}
+                    />
+                  )
+                })}
+              </div>
+            )}
           </nav>
 
           {feeds.length === 0 && (
@@ -400,12 +528,28 @@ export function ReaderApp() {
             <h2 className="font-display text-2xl text-[var(--ink)]">
               {activeFeedId === "all"
                 ? "Latest across the net"
-                : "From this feed"}
+                : activeFeedId === "twitch"
+                  ? "Live on Twitch"
+                  : "From this feed"}
             </h2>
             <p className="mt-1 text-sm text-[var(--ink-muted)]">
               {loading
                 ? "Fetching feeds…"
-                : `${items.length} ${items.length === 1 ? "story" : "stories"}`}
+                : activeFeedId === "twitch"
+                  ? liveCount === 0
+                    ? "Nobody you follow is live right now"
+                    : `${liveCount} live`
+                  : activeFeedId === "all"
+                    ? `${otherItems.length} ${
+                        otherItems.length === 1 ? "story" : "stories"
+                      }${
+                        twitchFeeds.length > 0
+                          ? ` · ${liveCount} live on Twitch`
+                          : ""
+                      }`
+                    : `${items.length} ${
+                        items.length === 1 ? "story" : "stories"
+                      }`}
             </p>
           </div>
 
@@ -453,7 +597,9 @@ export function ReaderApp() {
           {!loading &&
             status !== "error" &&
             items.length === 0 &&
-            feeds.length > 0 && (
+            feeds.length > 0 &&
+            activeFeedId !== "twitch" &&
+            !(activeFeedId === "all" && twitchFeeds.length > 0) && (
               <div className="rounded-md border border-dashed border-[var(--line)] bg-[var(--panel)]/50 px-4 py-10 text-[var(--ink-muted)]">
                 No stories returned. The feeds may be empty or temporarily
                 unreachable.
@@ -466,39 +612,68 @@ export function ReaderApp() {
             </div>
           )}
 
-          <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-            {items.map((item) => (
-              <li key={item.id} className="group py-5 first:pt-4">
-                <a
-                  href={item.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          {showTwitchSection && (
+            <div className="mb-10">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h3 className="font-display text-xl text-[var(--ink)]">
+                  Live on Twitch
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveFeedId("twitch")}
+                  className="text-xs font-medium tracking-wide text-[var(--accent)] uppercase hover:underline"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs tracking-wide text-[var(--accent)] uppercase">
-                        {item.feedTitle}
-                        <span className="text-[var(--ink-faint)]">
-                          {" "}
-                          · {item.publishedLabel}
-                        </span>
-                      </p>
-                      <h3 className="mt-1 font-display text-xl leading-snug text-[var(--ink)] transition-colors group-hover:text-[var(--accent)] sm:text-[1.35rem]">
-                        {item.title}
-                      </h3>
-                      {item.summary ? (
-                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--ink-muted)]">
-                          {item.summary}
-                        </p>
-                      ) : null}
-                    </div>
-                    <ArrowUpRight className="mt-1 size-4 shrink-0 text-[var(--ink-faint)] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
-                  </div>
-                </a>
-              </li>
-            ))}
-          </ul>
+                  View all
+                </button>
+              </div>
+              {twitchLiveItems.length === 0 ? (
+                <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                  Nobody you follow is live right now.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                  {twitchLiveItems.map((item) => (
+                    <StoryRow key={item.id} item={item} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {activeFeedId === "all" && otherItems.length > 0 && (
+            <div className="mb-3">
+              <h3 className="font-display text-xl text-[var(--ink)]">
+                Everything else
+              </h3>
+            </div>
+          )}
+
+          {(activeFeedId !== "all" || otherItems.length > 0) &&
+            activeFeedId !== "twitch" && (
+              <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                {riverItems.map((item) => (
+                  <StoryRow key={item.id} item={item} />
+                ))}
+              </ul>
+            )}
+
+          {activeFeedId === "twitch" && (
+            <>
+              {twitchLiveItems.length === 0 && !loading && (
+                <div className="rounded-md border border-dashed border-[var(--line)] bg-[var(--panel)]/50 px-4 py-10 text-[var(--ink-muted)]">
+                  Nobody you follow is live right now. Refresh when they go
+                  live.
+                </div>
+              )}
+              {twitchLiveItems.length > 0 && (
+                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                  {twitchLiveItems.map((item) => (
+                    <StoryRow key={item.id} item={item} />
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </section>
       </div>
     </div>

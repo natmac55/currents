@@ -31,6 +31,8 @@ Yes — new uploads show up in RSS. Paste a channel URL or `@handle`, e.g. `http
 
 Paste a channel URL like `https://www.twitch.tv/shroud`. When that streamer is **live**, Currents shows a single LIVE item (title, game, viewer count). When they’re offline, the feed stays in your list with an Offline status and no river item. Refresh to re-check.
 
+Twitch channels are grouped in the sidebar under **Twitch**, with an **All live** view and a **Live on Twitch** section at the top of All currents.
+
 ### Daily games
 
 Most daily puzzles don’t publish RSS. Currents has built-in support for:

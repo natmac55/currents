@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+  isTwitchFeedItem,
   isTwitchUrl,
   normalizeTwitchUrl,
   twitchLiveItem,
@@ -56,5 +57,6 @@ describe("twitchLiveItem", () => {
     assert.equal(item.link, "https://www.twitch.tv/shroud")
     assert.match(item.summary, /Valorant/)
     assert.match(item.summary, /4\.2K watching/)
+    assert.equal(isTwitchFeedItem(item), true)
   })
 })
