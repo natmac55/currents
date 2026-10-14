@@ -1,18 +1,33 @@
 "use client"
 
-import { useEffect, useState, useTransition, type FormEvent } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+  type FormEvent,
+} from "react"
 import {
   ArrowUpRight,
+  Download,
   LoaderCircle,
   Plus,
   RefreshCw,
   Trash2,
+  Upload,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DEFAULT_FEEDS } from "@/lib/defaults"
+import {
+  mergeFeeds,
+  parseFeedsImport,
+  serializeFeedsExport,
+} from "@/lib/import-export"
 import { loadFeeds, makeFeedId, saveFeeds } from "@/lib/storage"
+import { isTwitchUrl } from "@/lib/twitch"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +44,7 @@ export function ReaderApp() {
   const [hydrated, setHydrated] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [notice, setNotice] = useState<string | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setFeeds(loadFeeds())
@@ -87,7 +103,7 @@ export function ReaderApp() {
     const formUrl = String(new FormData(event.currentTarget).get("url") || "")
     const url = (formUrl || urlDraft).trim()
     if (!url) {
-      setAddError("Paste a feed, YouTube channel, or site URL.")
+      setAddError("Paste a feed, Twitch channel, YouTube, or site URL.")
       return
     }
     try {
@@ -156,6 +172,46 @@ export function ReaderApp() {
     persist(next)
   }
 
+  function exportFeeds() {
+    setAddError(null)
+    const blob = new Blob([serializeFeedsExport(feeds)], {
+      type: "application/json",
+    })
+    const href = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    const stamp = new Date().toISOString().slice(0, 10)
+    a.href = href
+    a.download = `currents-feeds-${stamp}.json`
+    a.click()
+    URL.revokeObjectURL(href)
+    setNotice(`Exported ${feeds.length} feeds.`)
+  }
+
+  async function onImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    setAddError(null)
+    setNotice(null)
+    try {
+      const text = await file.text()
+      const incoming = parseFeedsImport(text)
+      const { feeds: next, added } = mergeFeeds(feeds, incoming)
+      if (added === 0) {
+        setNotice("Import looked good — every feed was already in your list.")
+        return
+      }
+      persist(next)
+      setNotice(
+        `Imported ${added} new feed${added === 1 ? "" : "s"} (${next.length} total).`
+      )
+    } catch (error) {
+      setAddError(
+        error instanceof Error ? error.message : "Could not import that file"
+      )
+    }
+  }
+
   const items: FeedItem[] =
     activeFeedId === "all"
       ? (data?.items ?? [])
@@ -175,17 +231,49 @@ export function ReaderApp() {
               Pull headlines from the sites you choose — one river, no algorithm.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 border-[var(--line)] bg-[var(--panel)]/70 backdrop-blur"
-            onClick={() => void refresh(feeds)}
-            disabled={loading || feeds.length === 0}
-          >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-            Refresh
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={(e) => void onImportFile(e)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-[var(--line)] bg-[var(--panel)]/70 backdrop-blur"
+              onClick={() => importInputRef.current?.click()}
+            >
+              <Upload className="size-3.5" />
+              Import
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-[var(--line)] bg-[var(--panel)]/70 backdrop-blur"
+              onClick={exportFeeds}
+              disabled={feeds.length === 0}
+            >
+              <Download className="size-3.5" />
+              Export
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-[var(--line)] bg-[var(--panel)]/70 backdrop-blur"
+              onClick={() => void refresh(feeds)}
+              disabled={loading || feeds.length === 0}
+            >
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <form
@@ -197,8 +285,8 @@ export function ReaderApp() {
               name="url"
               value={urlDraft}
               onValueChange={setUrlDraft}
-              placeholder="https://www.youtube.com/@channel or feed.xml"
-              aria-label="Feed or YouTube URL"
+              placeholder="https://www.twitch.tv/shroud or feed.xml"
+              aria-label="Feed, Twitch, or YouTube URL"
               className="h-11 border-[var(--line)] bg-[var(--panel)] text-base shadow-sm"
             />
             {addError ? (
@@ -207,8 +295,8 @@ export function ReaderApp() {
               <p className="mt-2 text-sm text-[var(--accent)]">{notice}</p>
             ) : (
               <p className="mt-2 text-sm text-[var(--ink-faint)]">
-                YouTube, NYT Connections, CineNerdle, and Daily Orbs work. Paste
-                a channel, @handle, or a game URL.
+                YouTube, Twitch (live), NYT Connections, CineNerdle, and Daily
+                Orbs work. Import/export your list anytime.
               </p>
             )}
           </div>
@@ -276,7 +364,13 @@ export function ReaderApp() {
                     <span className="block truncate text-xs text-[var(--ink-faint)]">
                       {failed
                         ? "Failed to load"
-                        : `${meta?.itemCount ?? "—"} items`}
+                        : isTwitchUrl(feed.url)
+                          ? meta
+                            ? meta.itemCount > 0
+                              ? "Live now"
+                              : "Offline"
+                            : "—"
+                          : `${meta?.itemCount ?? "—"} items`}
                     </span>
                   </button>
                   <Button

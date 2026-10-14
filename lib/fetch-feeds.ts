@@ -15,6 +15,11 @@ import {
 import { makeFeedId } from "@/lib/feed-id"
 import { resolveFeedUrl } from "@/lib/resolve-feed-url"
 import { stripHtml, truncate } from "@/lib/strip-html"
+import {
+  fetchTwitchLiveItems,
+  isTwitchUrl,
+  twitchLoginFromUrl,
+} from "@/lib/twitch"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
 import { isYouTubeFeedUrl, isYouTubeShort } from "@/lib/youtube"
 
@@ -89,6 +94,25 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
             url: feedUrl,
             title: resolved.label || source.title || "Daily Orbs",
             itemCount: orbItems.length,
+          })
+          return
+        }
+
+        if (isTwitchUrl(feedUrl)) {
+          const login = twitchLoginFromUrl(feedUrl)
+          if (!login) {
+            throw new Error("Not a Twitch channel URL")
+          }
+          const { items: liveItems, title } = await fetchTwitchLiveItems(
+            id,
+            login
+          )
+          items.push(...liveItems)
+          resultSources.push({
+            id,
+            url: feedUrl,
+            title: resolved.label || source.title || title,
+            itemCount: liveItems.length,
           })
           return
         }

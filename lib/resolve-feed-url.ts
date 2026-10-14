@@ -17,6 +17,11 @@ import {
   DAILY_ORBS_ORIGIN,
   isDailyOrbsUrl,
 } from "@/lib/daily-orbs"
+import {
+  isTwitchUrl,
+  normalizeTwitchUrl,
+  twitchLoginFromUrl,
+} from "@/lib/twitch"
 
 const YT_FEED = "https://www.youtube.com/feeds/videos.xml"
 const CHANNEL_ID = "UC[\\w-]{20,}"
@@ -131,6 +136,19 @@ export async function resolveFeedUrl(raw: string): Promise<ResolveResult> {
     return {
       url: `${DAILY_ORBS_ORIGIN}/`,
       label: "Daily Orbs",
+    }
+  }
+
+  if (isTwitchUrl(parsed.toString())) {
+    const login = twitchLoginFromUrl(parsed.toString())
+    if (!login) {
+      throw new Error(
+        "Paste a Twitch channel URL like https://www.twitch.tv/shroud"
+      )
+    }
+    return {
+      url: normalizeTwitchUrl(login),
+      label: `Twitch · ${login}`,
     }
   }
 

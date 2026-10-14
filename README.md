@@ -19,12 +19,17 @@ Open [http://127.0.0.1:47291](http://127.0.0.1:47291).
 - The Next.js API route `POST /api/feeds` fetches and parses those feeds server-side (avoids CORS).
 - Stories are merged and sorted by publish time.
 - Starter feeds: Hacker News, BBC Technology, NASA Breaking News.
+- **Import / Export** — download your feed list as JSON, or merge a previously exported file back in.
 
 Paste any public RSS or Atom URL (for example `https://example.com/feed.xml`) to add more.
 
 ### YouTube
 
 Yes — new uploads show up in RSS. Paste a channel URL or `@handle`, e.g. `https://www.youtube.com/@GoogleDevelopers`. Currents resolves it to YouTube’s official Atom feed (`/feeds/videos.xml?channel_id=…`). **Shorts are filtered out**; only longform (`/watch`) videos appear.
+
+### Twitch
+
+Paste a channel URL like `https://www.twitch.tv/shroud`. When that streamer is **live**, Currents shows a single LIVE item (title, game, viewer count). When they’re offline, the feed stays in your list with an Offline status and no river item. Refresh to re-check.
 
 ### Daily games
 

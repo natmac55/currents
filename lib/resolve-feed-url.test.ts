@@ -47,4 +47,10 @@ describe("resolveFeedUrl", () => {
       "https://www.youtube.com/feeds/videos.xml?channel_id=UC4PooiX37Pld1T8J5SYT-SQ"
     )
   })
+
+  it("normalizes Twitch channel URLs", async () => {
+    const out = await resolveFeedUrl("https://www.twitch.tv/Shroud/videos")
+    assert.equal(out.url, "https://www.twitch.tv/shroud")
+    assert.equal(out.label, "Twitch · shroud")
+  })
 })
