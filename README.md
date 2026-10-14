@@ -22,6 +22,14 @@ Open [http://127.0.0.1:47291](http://127.0.0.1:47291).
 
 Paste any public RSS or Atom URL (for example `https://example.com/feed.xml`) to add more.
 
+### YouTube
+
+Yes — new uploads show up in RSS. Paste a channel URL or `@handle`, e.g. `https://www.youtube.com/@GoogleDevelopers`. Currents resolves it to YouTube’s official Atom feed (`/feeds/videos.xml?channel_id=…`).
+
+### Daily games
+
+Only if **that game or site publishes a feed**. Many daily puzzles (Wordle-style apps) do not. If they do, paste the feed URL the same way. Game *news* sites often have feeds even when the game itself does not.
+
 ## Scripts
 
 | Command         | Purpose               |

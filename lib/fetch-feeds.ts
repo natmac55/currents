@@ -1,4 +1,5 @@
 import Parser from "rss-parser"
+import { resolveFeedUrl } from "@/lib/resolve-feed-url"
 import { stripHtml, truncate } from "@/lib/strip-html"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
 
@@ -36,9 +37,13 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
   await Promise.all(
     sources.map(async (source) => {
       const id = source.id || sourceId(source.url)
+      let feedUrl = source.url
       try {
-        const feed = await parser.parseURL(source.url)
-        const feedTitle = feed.title?.trim() || source.title || source.url
+        const resolved = await resolveFeedUrl(source.url)
+        feedUrl = resolved.url
+        const feed = await parser.parseURL(feedUrl)
+        const feedTitle =
+          feed.title?.trim() || source.title || resolved.label || source.url
         let count = 0
 
         for (const entry of feed.items.slice(0, 25)) {
@@ -55,7 +60,7 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
             id: `${id}:${entry.guid || link}`,
             feedId: id,
             feedTitle,
-            feedUrl: source.url,
+            feedUrl,
             title,
             link,
             summary,
@@ -67,14 +72,14 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
 
         resultSources.push({
           id,
-          url: source.url,
+          url: feedUrl,
           title: feedTitle,
           itemCount: count,
         })
       } catch (error) {
         errors.push({
           feedId: id,
-          url: source.url,
+          url: feedUrl,
           message:
             error instanceof Error ? error.message : "Could not fetch this feed",
         })

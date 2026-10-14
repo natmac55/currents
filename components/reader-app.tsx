@@ -76,12 +76,12 @@ export function ReaderApp() {
     })
   }
 
-  function onAdd(event: FormEvent) {
+  async function onAdd(event: FormEvent) {
     event.preventDefault()
     setAddError(null)
     const url = urlDraft.trim()
     if (!url) {
-      setAddError("Paste an RSS or Atom feed URL.")
+      setAddError("Paste a feed, YouTube channel, or site URL.")
       return
     }
     try {
@@ -90,16 +90,44 @@ export function ReaderApp() {
         throw new Error("Use an http(s) URL")
       }
     } catch {
-      setAddError("That doesn’t look like a valid feed URL.")
+      setAddError("That doesn’t look like a valid URL.")
       return
     }
-    if (feeds.some((f) => f.url === url)) {
-      setAddError("That feed is already in your list.")
-      return
+
+    setStatus("loading")
+    try {
+      const res = await fetch("/api/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      })
+      const payload = (await res.json()) as {
+        url?: string
+        label?: string
+        error?: string
+      }
+      if (!res.ok || !payload.url) {
+        throw new Error(payload.error || "Could not resolve that URL")
+      }
+      if (feeds.some((f) => f.url === payload.url)) {
+        setAddError("That feed is already in your list.")
+        setStatus("ready")
+        return
+      }
+      const next = [
+        ...feeds,
+        {
+          id: makeFeedId(payload.url),
+          url: payload.url,
+          title: payload.label,
+        },
+      ]
+      setUrlDraft("")
+      persist(next)
+    } catch (error) {
+      setAddError(error instanceof Error ? error.message : "Could not add feed")
+      setStatus("ready")
     }
-    const next = [...feeds, { id: makeFeedId(url), url }]
-    setUrlDraft("")
-    persist(next)
   }
 
   function removeFeed(id: string) {
@@ -148,15 +176,17 @@ export function ReaderApp() {
             <Input
               value={urlDraft}
               onChange={(e) => setUrlDraft(e.target.value)}
-              placeholder="https://example.com/feed.xml"
-              aria-label="Feed URL"
+              placeholder="https://www.youtube.com/@channel or feed.xml"
+              aria-label="Feed or YouTube URL"
               className="h-11 border-[var(--line)] bg-[var(--panel)] text-base shadow-sm"
             />
             {addError ? (
               <p className="mt-2 text-sm text-[var(--danger)]">{addError}</p>
             ) : (
               <p className="mt-2 text-sm text-[var(--ink-faint)]">
-                Add any public RSS or Atom URL. Saved in this browser.
+                YouTube channels work (paste the channel or @handle). Daily games
+                only if that game publishes an RSS/Atom feed. Saved in this
+                browser.
               </p>
             )}
           </div>
