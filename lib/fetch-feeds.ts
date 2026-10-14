@@ -112,7 +112,7 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
             id,
             url: feedUrl,
             // Prefer Helix/GQL displayName over the login-based resolve label.
-            title: title || source.title || resolved.label,
+            title: title || source.title || resolved.label || "Twitch",
             itemCount: liveItems.length,
           })
           return
