@@ -1,7 +1,26 @@
 "use client"
 
 import { DEFAULT_FEEDS, STORAGE_KEY } from "@/lib/defaults"
+import { makeFeedId } from "@/lib/feed-id"
 import type { FeedSource } from "@/lib/types"
+
+export { makeFeedId }
+
+/** Recompute ids from URLs and drop duplicates (same normalized id). */
+export function migrateFeedIds(feeds: FeedSource[]): FeedSource[] {
+  const byId = new Map<string, FeedSource>()
+  for (const feed of feeds) {
+    if (typeof feed?.url !== "string" || feed.url.length === 0) continue
+    const id = makeFeedId(feed.url)
+    if (byId.has(id)) continue
+    byId.set(id, {
+      id,
+      url: feed.url,
+      title: feed.title,
+    })
+  }
+  return [...byId.values()]
+}
 
 export function loadFeeds(): FeedSource[] {
   if (typeof window === "undefined") return DEFAULT_FEEDS
@@ -10,7 +29,13 @@ export function loadFeeds(): FeedSource[] {
     if (!raw) return DEFAULT_FEEDS
     const parsed = JSON.parse(raw) as FeedSource[]
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_FEEDS
-    return parsed.filter((f) => typeof f?.url === "string" && f.url.length > 0)
+    const migrated = migrateFeedIds(parsed)
+    if (migrated.length === 0) return DEFAULT_FEEDS
+    // Persist corrected ids when truncated base64 (or other) ids drifted.
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      saveFeeds(migrated)
+    }
+    return migrated
   } catch {
     return DEFAULT_FEEDS
   }
@@ -18,15 +43,4 @@ export function loadFeeds(): FeedSource[] {
 
 export function saveFeeds(feeds: FeedSource[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds))
-}
-
-export function makeFeedId(url: string): string {
-  const bytes = new TextEncoder().encode(url)
-  let binary = ""
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-    .slice(0, 24)
 }

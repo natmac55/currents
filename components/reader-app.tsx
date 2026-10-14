@@ -115,13 +115,14 @@ export function ReaderApp() {
       if (!res.ok || !payload.url) {
         throw new Error(payload.error || "Could not resolve that URL")
       }
-      if (feeds.some((f) => f.url === payload.url)) {
+      const nextId = makeFeedId(payload.url)
+      if (feeds.some((f) => f.url === payload.url || f.id === nextId)) {
         setAddError("That feed is already in your list.")
         setStatus("ready")
         return
       }
       const added: FeedSource = {
-        id: makeFeedId(payload.url),
+        id: nextId,
         url: payload.url,
         title: payload.label,
       }

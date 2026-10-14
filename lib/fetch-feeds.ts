@@ -12,6 +12,7 @@ import {
   fetchDailyOrbsItems,
   isDailyOrbsUrl,
 } from "@/lib/daily-orbs"
+import { makeFeedId } from "@/lib/feed-id"
 import { resolveFeedUrl } from "@/lib/resolve-feed-url"
 import { stripHtml, truncate } from "@/lib/strip-html"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
@@ -39,10 +40,6 @@ function formatPublished(iso: string | null): string {
   }).format(date)
 }
 
-function sourceId(url: string): string {
-  return Buffer.from(url).toString("base64url").slice(0, 24)
-}
-
 export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult> {
   const items: FeedItem[] = []
   const resultSources: FeedFetchResult["sources"] = []
@@ -50,7 +47,7 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
 
   await Promise.all(
     sources.map(async (source) => {
-      const id = source.id || sourceId(source.url)
+      const id = source.id || makeFeedId(source.url)
       let feedUrl = source.url
       try {
         const resolved = await resolveFeedUrl(source.url)
