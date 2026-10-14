@@ -63,21 +63,33 @@ export function connectionsItemFromPuzzle(
   }
 }
 
-function dayString(base: Date, offsetDays: number): string {
-  const d = new Date(base)
-  d.setUTCDate(d.getUTCDate() + offsetDays)
-  return d.toISOString().slice(0, 10)
+/** NYT Games days roll on America/New_York, not UTC. */
+export function connectionsTodayNy(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now)
+}
+
+function dayStringNy(todayNy: string, offsetDays: number): string {
+  const [year, month, day] = todayNy.split("-").map(Number)
+  const utc = Date.UTC(year, month - 1, day + offsetDays, 12)
+  return new Date(utc).toISOString().slice(0, 10)
 }
 
 /**
- * Poll NYT's dated Connections JSON for the last ~2 weeks (+ tomorrow,
- * since puzzles often publish early). Never includes category answers.
+ * Poll NYT's dated Connections JSON for the last ~2 weeks through
+ * *today in Eastern time*. Tomorrow may already be on their CDN, but we
+ * don't surface it until that calendar day in America/New_York.
+ * Never includes category answers.
  */
 export async function fetchConnectionsItems(
   feedId: string
 ): Promise<FeedItem[]> {
-  const now = new Date()
-  const dates = Array.from({ length: 16 }, (_, i) => dayString(now, 1 - i))
+  const todayNy = connectionsTodayNy()
+  const dates = Array.from({ length: 16 }, (_, i) => dayStringNy(todayNy, -i))
   const items: FeedItem[] = []
 
   await Promise.all(
@@ -95,6 +107,8 @@ export async function fetchConnectionsItems(
         })
         if (!res.ok) return
         const puzzle = (await res.json()) as ConnectionsPuzzle
+        // Defend against CDN returning a future print_date early.
+        if (puzzle.print_date && puzzle.print_date > todayNy) return
         const item = connectionsItemFromPuzzle(puzzle, feedId)
         if (item) items.push(item)
       } catch {

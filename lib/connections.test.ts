@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
   CONNECTIONS_PAGE_URL,
   connectionsItemFromPuzzle,
+  connectionsTodayNy,
   isConnectionsUrl,
 } from "./connections"
 
@@ -20,6 +21,16 @@ describe("isConnectionsUrl", () => {
     assert.equal(
       isConnectionsUrl("https://www.nytimes.com/games/wordle"),
       false
+    )
+  })
+})
+
+describe("connectionsTodayNy", () => {
+  it("formats a New York calendar date", () => {
+    // 2026-10-15 02:00 UTC is still Oct 14 in America/New_York (EDT).
+    assert.equal(
+      connectionsTodayNy(new Date("2026-10-15T02:00:00.000Z")),
+      "2026-10-14"
     )
   })
 })
