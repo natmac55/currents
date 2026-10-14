@@ -2,6 +2,7 @@ import Parser from "rss-parser"
 import { resolveFeedUrl } from "@/lib/resolve-feed-url"
 import { stripHtml, truncate } from "@/lib/strip-html"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
+import { isYouTubeFeedUrl, isYouTubeShort } from "@/lib/youtube"
 
 const parser = new Parser({
   timeout: 12_000,
@@ -44,12 +45,17 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
         const feed = await parser.parseURL(feedUrl)
         const feedTitle =
           feed.title?.trim() || source.title || resolved.label || source.url
+        const dropShorts = isYouTubeFeedUrl(feedUrl)
+        // Pull a wider window when skipping Shorts so longform still fills the list.
+        const candidates = feed.items.slice(0, dropShorts ? 50 : 25)
         let count = 0
 
-        for (const entry of feed.items.slice(0, 25)) {
+        for (const entry of candidates) {
+          if (count >= 25) break
           const title = entry.title?.trim()
           const link = entry.link?.trim() || entry.guid?.trim()
           if (!title || !link) continue
+          if (dropShorts && isYouTubeShort(link)) continue
 
           const publishedAt = entry.isoDate ?? entry.pubDate ?? null
           const summary = truncate(

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 47291 --hostname 0.0.0.0",
     "lint": "eslint",
-    "test": "tsx --test lib/strip-html.test.ts lib/resolve-feed-url.test.ts"
+    "test": "tsx --test lib/strip-html.test.ts lib/resolve-feed-url.test.ts lib/youtube.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -28,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
+    "playwright-core": "^1.64.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
