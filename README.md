@@ -27,6 +27,8 @@ Paste any public RSS or Atom URL (for example `https://example.com/feed.xml`) to
 
 Yes — new uploads show up in RSS. Paste a channel URL or `@handle`, e.g. `https://www.youtube.com/@GoogleDevelopers`. Currents resolves it to YouTube’s official Atom feed (`/feeds/videos.xml?channel_id=…`). **Shorts are filtered out**; only longform (`/watch`) videos appear.
 
+YouTube channels are grouped in the sidebar under **YouTube**, with an **All uploads** view and a **From YouTube** section in All currents (same idea as Twitch).
+
 ### Twitch
 
 Paste a channel URL like `https://www.twitch.tv/shroud`. When that streamer is **live**, Currents shows a single LIVE item (title, game, viewer count). When they’re offline, the feed stays in your list with an Offline status and no river item. Refresh to re-check.

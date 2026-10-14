@@ -1,3 +1,5 @@
+import type { FeedItem } from "@/lib/types"
+
 /** YouTube Shorts use /shorts/ URLs in the Atom feed; longform uses /watch?v=. */
 export function isYouTubeShort(link: string): boolean {
   try {
@@ -23,4 +25,10 @@ export function isYouTubeFeedUrl(feedUrl: string): boolean {
   } catch {
     return false
   }
+}
+
+export function isYouTubeFeedItem(
+  item: Pick<FeedItem, "feedUrl">
+): boolean {
+  return isYouTubeFeedUrl(item.feedUrl)
 }

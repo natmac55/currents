@@ -30,10 +30,11 @@ import {
 import { loadFeeds, makeFeedId, saveFeeds } from "@/lib/storage"
 import { isTwitchFeedItem, isTwitchUrl } from "@/lib/twitch"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
+import { isYouTubeFeedItem, isYouTubeFeedUrl } from "@/lib/youtube"
 import { cn } from "@/lib/utils"
 
 type Status = "idle" | "loading" | "ready" | "error"
-type ActiveView = string | "all" | "twitch"
+type ActiveView = string | "all" | "twitch" | "youtube"
 
 function StoryRow({ item }: { item: FeedItem }) {
   return (
@@ -388,31 +389,47 @@ export function ReaderApp() {
 
   const allItems = data?.items ?? []
   const twitchFeeds = feeds.filter((f) => isTwitchUrl(f.url))
-  const otherFeeds = feeds.filter((f) => !isTwitchUrl(f.url))
+  const youtubeFeeds = feeds.filter((f) => isYouTubeFeedUrl(f.url))
+  const otherFeeds = feeds.filter(
+    (f) => !isTwitchUrl(f.url) && !isYouTubeFeedUrl(f.url)
+  )
   const twitchLiveItems = allItems.filter(isTwitchFeedItem)
-  const otherItems = allItems.filter((item) => !isTwitchFeedItem(item))
+  const youtubeItems = allItems.filter(isYouTubeFeedItem)
+  const otherItems = allItems.filter(
+    (item) => !isTwitchFeedItem(item) && !isYouTubeFeedItem(item)
+  )
 
   const items: FeedItem[] =
     activeFeedId === "all"
       ? allItems
       : activeFeedId === "twitch"
         ? twitchLiveItems
-        : allItems.filter((item) => item.feedId === activeFeedId)
+        : activeFeedId === "youtube"
+          ? youtubeItems
+          : allItems.filter((item) => item.feedId === activeFeedId)
 
   const loading = status === "loading" || isPending
   const liveCount = twitchLiveItems.length
+  const youtubeCount = youtubeItems.length
 
   const showTwitchSection =
     activeFeedId === "all" &&
     twitchFeeds.length > 0 &&
     (twitchLiveItems.length > 0 || !loading)
 
+  const showYouTubeSection =
+    activeFeedId === "all" &&
+    youtubeFeeds.length > 0 &&
+    (youtubeItems.length > 0 || !loading)
+
   const riverItems =
     activeFeedId === "all"
       ? otherItems
       : activeFeedId === "twitch"
         ? twitchLiveItems
-        : items
+        : activeFeedId === "youtube"
+          ? youtubeItems
+          : items
 
   return (
     <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-5 pb-20 pt-8 sm:px-8 lg:px-10">
@@ -570,6 +587,51 @@ export function ReaderApp() {
               )
             })}
 
+            {youtubeFeeds.length > 0 && (
+              <div className="pt-3">
+                <p className="mb-1 px-3 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
+                  YouTube
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveFeedId("youtube")}
+                  className={cn(
+                    "mb-1 w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                    activeFeedId === "youtube"
+                      ? "bg-[var(--accent-soft)] font-medium text-[var(--ink)]"
+                      : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
+                  )}
+                >
+                  <span className="block">All uploads</span>
+                  <span className="block text-xs text-[var(--ink-faint)]">
+                    {youtubeCount === 0
+                      ? "No videos"
+                      : `${youtubeCount} videos`}
+                  </span>
+                </button>
+                {youtubeFeeds.map((feed) => {
+                  const meta = data?.sources.find((s) => s.id === feed.id)
+                  const failed = Boolean(
+                    data?.errors.find((e) => e.feedId === feed.id)
+                  )
+                  return (
+                    <FeedNavRow
+                      key={feed.id}
+                      feed={{
+                        ...feed,
+                        title: meta?.title || feed.title || feed.url,
+                      }}
+                      active={activeFeedId === feed.id}
+                      metaLabel={`${meta?.itemCount ?? "—"} items`}
+                      failed={failed}
+                      onSelect={() => setActiveFeedId(feed.id)}
+                      onRemove={() => removeFeed(feed.id)}
+                    />
+                  )
+                })}
+              </div>
+            )}
+
             {twitchFeeds.length > 0 && (
               <div className="pt-3">
                 <p className="mb-1 px-3 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
@@ -636,7 +698,9 @@ export function ReaderApp() {
                 ? "Latest across the net"
                 : activeFeedId === "twitch"
                   ? "Live on Twitch"
-                  : "From this feed"}
+                  : activeFeedId === "youtube"
+                    ? "From YouTube"
+                    : "From this feed"}
             </h2>
             <p className="mt-1 text-sm text-[var(--ink-muted)]">
               {loading
@@ -645,17 +709,29 @@ export function ReaderApp() {
                   ? liveCount === 0
                     ? "Nobody you follow is live right now"
                     : `${liveCount} live`
-                  : activeFeedId === "all"
-                    ? `${otherItems.length} ${
-                        otherItems.length === 1 ? "story" : "stories"
-                      }${
-                        twitchFeeds.length > 0
-                          ? ` · ${liveCount} live on Twitch`
-                          : ""
-                      }`
-                    : `${items.length} ${
-                        items.length === 1 ? "story" : "stories"
-                      }`}
+                  : activeFeedId === "youtube"
+                    ? youtubeCount === 0
+                      ? "No recent uploads"
+                      : `${youtubeCount} ${
+                          youtubeCount === 1 ? "video" : "videos"
+                        }`
+                    : activeFeedId === "all"
+                      ? [
+                          `${otherItems.length} ${
+                            otherItems.length === 1 ? "story" : "stories"
+                          }`,
+                          youtubeFeeds.length > 0
+                            ? `${youtubeCount} on YouTube`
+                            : null,
+                          twitchFeeds.length > 0
+                            ? `${liveCount} live on Twitch`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : `${items.length} ${
+                          items.length === 1 ? "story" : "stories"
+                        }`}
             </p>
           </div>
 
@@ -705,7 +781,11 @@ export function ReaderApp() {
             items.length === 0 &&
             feeds.length > 0 &&
             activeFeedId !== "twitch" &&
-            !(activeFeedId === "all" && twitchFeeds.length > 0) && (
+            activeFeedId !== "youtube" &&
+            !(
+              activeFeedId === "all" &&
+              (twitchFeeds.length > 0 || youtubeFeeds.length > 0)
+            ) && (
               <div className="rounded-md border border-dashed border-[var(--line)] bg-[var(--panel)]/50 px-4 py-10 text-[var(--ink-muted)]">
                 No stories returned. The feeds may be empty or temporarily
                 unreachable.
@@ -746,6 +826,34 @@ export function ReaderApp() {
             </div>
           )}
 
+          {showYouTubeSection && (
+            <div className="mb-10">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h3 className="font-display text-xl text-[var(--ink)]">
+                  From YouTube
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveFeedId("youtube")}
+                  className="text-xs font-medium tracking-wide text-[var(--accent)] uppercase hover:underline"
+                >
+                  View all
+                </button>
+              </div>
+              {youtubeItems.length === 0 ? (
+                <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                  No recent uploads from your channels.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                  {youtubeItems.map((item) => (
+                    <StoryRow key={item.id} item={item} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {activeFeedId === "all" && otherItems.length > 0 && (
             <div className="mb-3">
               <h3 className="font-display text-xl text-[var(--ink)]">
@@ -755,7 +863,8 @@ export function ReaderApp() {
           )}
 
           {(activeFeedId !== "all" || otherItems.length > 0) &&
-            activeFeedId !== "twitch" && (
+            activeFeedId !== "twitch" &&
+            activeFeedId !== "youtube" && (
               <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
                 {riverItems.map((item) => (
                   <StoryRow key={item.id} item={item} />
@@ -774,6 +883,23 @@ export function ReaderApp() {
               {twitchLiveItems.length > 0 && (
                 <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
                   {twitchLiveItems.map((item) => (
+                    <StoryRow key={item.id} item={item} />
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+
+          {activeFeedId === "youtube" && (
+            <>
+              {youtubeItems.length === 0 && !loading && (
+                <div className="rounded-md border border-dashed border-[var(--line)] bg-[var(--panel)]/50 px-4 py-10 text-[var(--ink-muted)]">
+                  No recent uploads from your channels.
+                </div>
+              )}
+              {youtubeItems.length > 0 && (
+                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                  {youtubeItems.map((item) => (
                     <StoryRow key={item.id} item={item} />
                   ))}
                 </ul>
