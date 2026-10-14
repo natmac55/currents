@@ -13,3 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 This repo is a **personal RSS/Atom reader/aggregator** named Currents — it *consumes* feeds from the open web (including YouTube channel uploads).
 
 Do **not** replace it with a blog/notes site that *publishes* `/feed.xml`. That was a mistaken earlier direction.
+
+## Project: Currents (RSS reader)
+
+This repo is a personal RSS/Atom reader named Currents. Do not replace it with Field Notes or any site that publishes /feed.xml.
