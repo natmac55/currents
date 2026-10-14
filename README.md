@@ -26,9 +26,15 @@ Paste any public RSS or Atom URL (for example `https://example.com/feed.xml`) to
 
 Yes — new uploads show up in RSS. Paste a channel URL or `@handle`, e.g. `https://www.youtube.com/@GoogleDevelopers`. Currents resolves it to YouTube’s official Atom feed (`/feeds/videos.xml?channel_id=…`). **Shorts are filtered out**; only longform (`/watch`) videos appear.
 
-### Daily games / NYT Connections
+### Daily games
 
-Most daily puzzles don’t publish RSS. **NYT Connections** is supported directly: paste `https://www.nytimes.com/games/connections` and Currents lists each day’s puzzle (spoiler-free — title + link only). Hit Refresh when you want the newest one.
+Most daily puzzles don’t publish RSS. Currents has built-in support for:
+
+- **NYT Connections** — `https://www.nytimes.com/games/connections`
+- **CineNerdle Original / Reversal** — paste a puzzle URL (e.g. `/puzzles/original/1442` or `/puzzles/reversal/R1245`), or the site home for both
+- **Daily Orbs** — `https://dailyorbs.com/`
+
+Items are spoiler-free (title + link). Hit Refresh for the newest day.
 
 ## Scripts
 

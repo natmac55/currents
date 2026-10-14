@@ -1,8 +1,17 @@
 import Parser from "rss-parser"
 import {
+  cinenerdleModeFromUrl,
+  fetchCinenerdleItems,
+  isCinenerdleUrl,
+} from "@/lib/cinenerdle"
+import {
   fetchConnectionsItems,
   isConnectionsUrl,
 } from "@/lib/connections"
+import {
+  fetchDailyOrbsItems,
+  isDailyOrbsUrl,
+} from "@/lib/daily-orbs"
 import { resolveFeedUrl } from "@/lib/resolve-feed-url"
 import { stripHtml, truncate } from "@/lib/strip-html"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
@@ -55,6 +64,34 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
             url: feedUrl,
             title: resolved.label || source.title || "NYT Connections",
             itemCount: connectionItems.length,
+          })
+          return
+        }
+
+        if (isCinenerdleUrl(feedUrl)) {
+          const mode = cinenerdleModeFromUrl(feedUrl)
+          const { items: cineItems, title } = await fetchCinenerdleItems(
+            id,
+            mode
+          )
+          items.push(...cineItems)
+          resultSources.push({
+            id,
+            url: feedUrl,
+            title: resolved.label || source.title || title,
+            itemCount: cineItems.length,
+          })
+          return
+        }
+
+        if (isDailyOrbsUrl(feedUrl)) {
+          const orbItems = await fetchDailyOrbsItems(id)
+          items.push(...orbItems)
+          resultSources.push({
+            id,
+            url: feedUrl,
+            title: resolved.label || source.title || "Daily Orbs",
+            itemCount: orbItems.length,
           })
           return
         }

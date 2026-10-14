@@ -206,8 +206,8 @@ export function ReaderApp() {
               <p className="mt-2 text-sm text-[var(--accent)]">{notice}</p>
             ) : (
               <p className="mt-2 text-sm text-[var(--ink-faint)]">
-                YouTube channels and NYT Connections work. Paste a channel,
-                @handle, or https://www.nytimes.com/games/connections.
+                YouTube, NYT Connections, CineNerdle, and Daily Orbs work. Paste
+                a channel, @handle, or a game URL.
               </p>
             )}
           </div>

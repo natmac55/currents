@@ -5,9 +5,18 @@
  */
 
 import {
+  cinenerdleModeFromUrl,
+  isCinenerdleUrl,
+  normalizeCinenerdleUrl,
+} from "@/lib/cinenerdle"
+import {
   CONNECTIONS_PAGE_URL,
   isConnectionsUrl,
 } from "@/lib/connections"
+import {
+  DAILY_ORBS_ORIGIN,
+  isDailyOrbsUrl,
+} from "@/lib/daily-orbs"
 
 const YT_FEED = "https://www.youtube.com/feeds/videos.xml"
 const CHANNEL_ID = "UC[\\w-]{20,}"
@@ -102,6 +111,26 @@ export async function resolveFeedUrl(raw: string): Promise<ResolveResult> {
     return {
       url: CONNECTIONS_PAGE_URL,
       label: "NYT Connections",
+    }
+  }
+
+  if (isCinenerdleUrl(parsed.toString())) {
+    const mode = cinenerdleModeFromUrl(parsed.toString())
+    return {
+      url: normalizeCinenerdleUrl(mode),
+      label:
+        mode === "original"
+          ? "CineNerdle Original"
+          : mode === "reversal"
+            ? "CineNerdle Reversal"
+            : "CineNerdle",
+    }
+  }
+
+  if (isDailyOrbsUrl(parsed.toString())) {
+    return {
+      url: `${DAILY_ORBS_ORIGIN}/`,
+      label: "Daily Orbs",
     }
   }
 
