@@ -19,7 +19,11 @@ function Input({ className, type, onChange, onValueChange, ...props }: Props) {
       onValueChange={(value) => {
         onValueChange?.(value)
       }}
-      onChange={onChange}
+      onChange={(event) => {
+        onChange?.(event)
+        // Keep controlled React state in sync for native input events too.
+        onValueChange?.(event.target.value)
+      }}
       {...props}
     />
   )
