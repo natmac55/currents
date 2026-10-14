@@ -111,7 +111,8 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
           resultSources.push({
             id,
             url: feedUrl,
-            title: resolved.label || source.title || title,
+            // Prefer Helix/GQL displayName over the login-based resolve label.
+            title: title || source.title || resolved.label,
             itemCount: liveItems.length,
           })
           return
