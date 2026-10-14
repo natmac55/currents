@@ -1,4 +1,8 @@
 import Parser from "rss-parser"
+import {
+  fetchConnectionsItems,
+  isConnectionsUrl,
+} from "@/lib/connections"
 import { resolveFeedUrl } from "@/lib/resolve-feed-url"
 import { stripHtml, truncate } from "@/lib/strip-html"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
@@ -42,6 +46,19 @@ export async function fetchFeeds(sources: FeedSource[]): Promise<FeedFetchResult
       try {
         const resolved = await resolveFeedUrl(source.url)
         feedUrl = resolved.url
+
+        if (isConnectionsUrl(feedUrl)) {
+          const connectionItems = await fetchConnectionsItems(id)
+          items.push(...connectionItems)
+          resultSources.push({
+            id,
+            url: feedUrl,
+            title: resolved.label || source.title || "NYT Connections",
+            itemCount: connectionItems.length,
+          })
+          return
+        }
+
         const feed = await parser.parseURL(feedUrl)
         const feedTitle =
           feed.title?.trim() || source.title || resolved.label || source.url

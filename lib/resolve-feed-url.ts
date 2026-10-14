@@ -1,7 +1,13 @@
 /**
  * Turn common site URLs into fetchable feed URLs when we can.
  * YouTube channel pages → official Atom upload feed.
+ * NYT Connections game page → synthetic daily-puzzle source.
  */
+
+import {
+  CONNECTIONS_PAGE_URL,
+  isConnectionsUrl,
+} from "@/lib/connections"
 
 const YT_FEED = "https://www.youtube.com/feeds/videos.xml"
 const CHANNEL_ID = "UC[\\w-]{20,}"
@@ -91,6 +97,13 @@ export async function resolveFeedUrl(raw: string): Promise<ResolveResult> {
   }
 
   const host = parsed.hostname.replace(/^www\./, "")
+
+  if (isConnectionsUrl(parsed.toString())) {
+    return {
+      url: CONNECTIONS_PAGE_URL,
+      label: "NYT Connections",
+    }
+  }
 
   if (host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be") {
     // Already the official uploads feed
