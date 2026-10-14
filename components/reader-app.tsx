@@ -28,6 +28,7 @@ export function ReaderApp() {
   const [activeFeedId, setActiveFeedId] = useState<string | "all">("all")
   const [hydrated, setHydrated] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     setFeeds(loadFeeds())
@@ -45,7 +46,7 @@ export function ReaderApp() {
       setData({ items: [], sources: [], errors: [] })
       setStatus("ready")
       setFetchError(null)
-      return
+      return null
     }
 
     setStatus("loading")
@@ -62,9 +63,11 @@ export function ReaderApp() {
       }
       setData(payload)
       setStatus("ready")
+      return payload
     } catch (error) {
       setStatus("error")
       setFetchError(error instanceof Error ? error.message : "Refresh failed")
+      return null
     }
   }
 
@@ -76,10 +79,13 @@ export function ReaderApp() {
     })
   }
 
-  async function onAdd(event: FormEvent) {
+  async function onAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setAddError(null)
-    const url = urlDraft.trim()
+    setNotice(null)
+
+    const formUrl = String(new FormData(event.currentTarget).get("url") || "")
+    const url = (formUrl || urlDraft).trim()
     if (!url) {
       setAddError("Paste a feed, YouTube channel, or site URL.")
       return
@@ -114,16 +120,29 @@ export function ReaderApp() {
         setStatus("ready")
         return
       }
-      const next = [
-        ...feeds,
-        {
-          id: makeFeedId(payload.url),
-          url: payload.url,
-          title: payload.label,
-        },
-      ]
+      const added: FeedSource = {
+        id: makeFeedId(payload.url),
+        url: payload.url,
+        title: payload.label,
+      }
+      const next = [...feeds, added]
+      setFeeds(next)
+      saveFeeds(next)
       setUrlDraft("")
-      persist(next)
+      setActiveFeedId(added.id)
+
+      const result = await refresh(next)
+      const meta = result?.sources.find((s) => s.id === added.id)
+      const failed = result?.errors.find((e) => e.feedId === added.id)
+      if (failed) {
+        setNotice(`Added, but couldn’t load stories: ${failed.message}`)
+      } else {
+        setNotice(
+          `Added ${meta?.title || added.title || "feed"} — showing its ${
+            meta?.itemCount ?? 0
+          } latest stories.`
+        )
+      }
     } catch (error) {
       setAddError(error instanceof Error ? error.message : "Could not add feed")
       setStatus("ready")
@@ -174,19 +193,21 @@ export function ReaderApp() {
         >
           <div className="flex-1">
             <Input
+              name="url"
               value={urlDraft}
-              onChange={(e) => setUrlDraft(e.target.value)}
+              onValueChange={setUrlDraft}
               placeholder="https://www.youtube.com/@channel or feed.xml"
               aria-label="Feed or YouTube URL"
               className="h-11 border-[var(--line)] bg-[var(--panel)] text-base shadow-sm"
             />
             {addError ? (
               <p className="mt-2 text-sm text-[var(--danger)]">{addError}</p>
+            ) : notice ? (
+              <p className="mt-2 text-sm text-[var(--accent)]">{notice}</p>
             ) : (
               <p className="mt-2 text-sm text-[var(--ink-faint)]">
-                YouTube channels work (paste the channel or @handle). Daily games
-                only if that game publishes an RSS/Atom feed. Saved in this
-                browser.
+                YouTube channels work (paste the channel or @handle). After you
+                add one, Currents jumps to that feed so you can see its stories.
               </p>
             )}
           </div>
