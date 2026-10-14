@@ -10,6 +10,8 @@ import {
 } from "react"
 import {
   ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
   Download,
   LoaderCircle,
   Plus,
@@ -28,6 +30,7 @@ import {
   serializeFeedsExport,
 } from "@/lib/import-export"
 import { loadFeeds, makeFeedId, saveFeeds } from "@/lib/storage"
+import { formatAbsoluteTime, formatRelativeTime } from "@/lib/time"
 import { isTwitchFeedItem, isTwitchUrl } from "@/lib/twitch"
 import type { FeedFetchResult, FeedItem, FeedSource } from "@/lib/types"
 import { isYouTubeFeedItem, isYouTubeFeedUrl } from "@/lib/youtube"
@@ -36,7 +39,45 @@ import { cn } from "@/lib/utils"
 type Status = "idle" | "loading" | "ready" | "error"
 type ActiveView = string | "all" | "twitch" | "youtube"
 
+type CollapseKey =
+  | "navYoutube"
+  | "navTwitch"
+  | "riverTwitch"
+  | "riverYoutube"
+  | "riverOther"
+
+const COLLAPSE_STORAGE_KEY = "currents.collapsed.v1"
+
+type CollapseState = Record<CollapseKey, boolean>
+
+const DEFAULT_COLLAPSE: CollapseState = {
+  navYoutube: false,
+  navTwitch: false,
+  riverTwitch: false,
+  riverYoutube: false,
+  riverOther: false,
+}
+
+function loadCollapseState(): CollapseState {
+  if (typeof window === "undefined") return DEFAULT_COLLAPSE
+  try {
+    const raw = window.localStorage.getItem(COLLAPSE_STORAGE_KEY)
+    if (!raw) return DEFAULT_COLLAPSE
+    const parsed = JSON.parse(raw) as Partial<CollapseState>
+    return { ...DEFAULT_COLLAPSE, ...parsed }
+  } catch {
+    return DEFAULT_COLLAPSE
+  }
+}
+
 function StoryRow({ item }: { item: FeedItem }) {
+  const relative = formatRelativeTime(item.publishedAt)
+  const absolute =
+    item.publishedAt != null
+      ? formatAbsoluteTime(item.publishedAt)
+      : item.publishedLabel
+  const stamp = relative ?? absolute
+
   return (
     <li className="group py-5 first:pt-4">
       <a
@@ -46,13 +87,9 @@ function StoryRow({ item }: { item: FeedItem }) {
         className="block outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-xs tracking-wide text-[var(--accent)] uppercase">
               {item.feedTitle}
-              <span className="text-[var(--ink-faint)]">
-                {" "}
-                · {item.publishedLabel}
-              </span>
             </p>
             <h3 className="mt-1 font-display text-xl leading-snug text-[var(--ink)] transition-colors group-hover:text-[var(--accent)] sm:text-[1.35rem]">
               {item.title}
@@ -63,10 +100,52 @@ function StoryRow({ item }: { item: FeedItem }) {
               </p>
             ) : null}
           </div>
-          <ArrowUpRight className="mt-1 size-4 shrink-0 text-[var(--ink-faint)] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+          <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
+            <time
+              dateTime={item.publishedAt ?? undefined}
+              title={absolute}
+              className="text-right text-xs tabular-nums text-[var(--ink-faint)]"
+            >
+              <span className="block font-medium text-[var(--ink-muted)]">
+                {stamp}
+              </span>
+              {relative ? (
+                <span className="mt-0.5 block text-[0.7rem]">{absolute}</span>
+              ) : null}
+            </time>
+            <ArrowUpRight className="size-4 text-[var(--ink-faint)] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" />
+          </div>
         </div>
       </a>
     </li>
+  )
+}
+
+function CollapseToggle({
+  open,
+  label,
+  onToggle,
+  className,
+}: {
+  open: boolean
+  label: string
+  onToggle: () => void
+  className?: string
+}) {
+  const Icon = open ? ChevronDown : ChevronRight
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
+      className={cn(
+        "inline-flex size-7 items-center justify-center rounded-md text-[var(--ink-faint)] transition-colors hover:bg-[var(--panel)] hover:text-[var(--ink)]",
+        className
+      )}
+    >
+      <Icon className="size-4" />
+    </button>
   )
 }
 
@@ -174,8 +253,21 @@ export function ReaderApp() {
     feed: FeedSource
     index: number
   } | null>(null)
+  const [collapsed, setCollapsed] = useState<CollapseState>(DEFAULT_COLLAPSE)
   const importInputRef = useRef<HTMLInputElement>(null)
   const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function toggleCollapsed(key: CollapseKey) {
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      try {
+        window.localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // ignore quota / private mode
+      }
+      return next
+    })
+  }
 
   function clearRestoreTimer() {
     if (restoreTimerRef.current) {
@@ -194,6 +286,7 @@ export function ReaderApp() {
 
   useEffect(() => {
     setFeeds(loadFeeds())
+    setCollapsed(loadCollapseState())
     setHydrated(true)
     return () => clearRestoreTimer()
   }, [])
@@ -589,97 +682,119 @@ export function ReaderApp() {
 
             {youtubeFeeds.length > 0 && (
               <div className="pt-3">
-                <p className="mb-1 px-3 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
-                  YouTube
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveFeedId("youtube")}
-                  className={cn(
-                    "mb-1 w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                    activeFeedId === "youtube"
-                      ? "bg-[var(--accent-soft)] font-medium text-[var(--ink)]"
-                      : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
-                  )}
-                >
-                  <span className="block">All uploads</span>
-                  <span className="block text-xs text-[var(--ink-faint)]">
-                    {youtubeCount === 0
-                      ? "No videos"
-                      : `${youtubeCount} videos`}
-                  </span>
-                </button>
-                {youtubeFeeds.map((feed) => {
-                  const meta = data?.sources.find((s) => s.id === feed.id)
-                  const failed = Boolean(
-                    data?.errors.find((e) => e.feedId === feed.id)
-                  )
-                  return (
-                    <FeedNavRow
-                      key={feed.id}
-                      feed={{
-                        ...feed,
-                        title: meta?.title || feed.title || feed.url,
-                      }}
-                      active={activeFeedId === feed.id}
-                      metaLabel={`${meta?.itemCount ?? "—"} items`}
-                      failed={failed}
-                      onSelect={() => setActiveFeedId(feed.id)}
-                      onRemove={() => removeFeed(feed.id)}
-                    />
-                  )
-                })}
+                <div className="mb-1 flex items-center justify-between gap-1 px-1">
+                  <p className="px-2 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
+                    YouTube
+                  </p>
+                  <CollapseToggle
+                    open={!collapsed.navYoutube}
+                    label="YouTube feeds"
+                    onToggle={() => toggleCollapsed("navYoutube")}
+                  />
+                </div>
+                {!collapsed.navYoutube && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFeedId("youtube")}
+                      className={cn(
+                        "mb-1 w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                        activeFeedId === "youtube"
+                          ? "bg-[var(--accent-soft)] font-medium text-[var(--ink)]"
+                          : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
+                      )}
+                    >
+                      <span className="block">All uploads</span>
+                      <span className="block text-xs text-[var(--ink-faint)]">
+                        {youtubeCount === 0
+                          ? "No videos"
+                          : `${youtubeCount} videos`}
+                      </span>
+                    </button>
+                    {youtubeFeeds.map((feed) => {
+                      const meta = data?.sources.find((s) => s.id === feed.id)
+                      const failed = Boolean(
+                        data?.errors.find((e) => e.feedId === feed.id)
+                      )
+                      return (
+                        <FeedNavRow
+                          key={feed.id}
+                          feed={{
+                            ...feed,
+                            title: meta?.title || feed.title || feed.url,
+                          }}
+                          active={activeFeedId === feed.id}
+                          metaLabel={`${meta?.itemCount ?? "—"} items`}
+                          failed={failed}
+                          onSelect={() => setActiveFeedId(feed.id)}
+                          onRemove={() => removeFeed(feed.id)}
+                        />
+                      )
+                    })}
+                  </>
+                )}
               </div>
             )}
 
             {twitchFeeds.length > 0 && (
               <div className="pt-3">
-                <p className="mb-1 px-3 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
-                  Twitch
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveFeedId("twitch")}
-                  className={cn(
-                    "mb-1 w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                    activeFeedId === "twitch"
-                      ? "bg-[var(--accent-soft)] font-medium text-[var(--ink)]"
-                      : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
-                  )}
-                >
-                  <span className="block">All live</span>
-                  <span className="block text-xs text-[var(--ink-faint)]">
-                    {liveCount === 0
-                      ? "Nobody live"
-                      : `${liveCount} live`}
-                  </span>
-                </button>
-                {twitchFeeds.map((feed) => {
-                  const meta = data?.sources.find((s) => s.id === feed.id)
-                  const failed = Boolean(
-                    data?.errors.find((e) => e.feedId === feed.id)
-                  )
-                  return (
-                    <FeedNavRow
-                      key={feed.id}
-                      feed={{
-                        ...feed,
-                        title: meta?.title || feed.title || feed.url,
-                      }}
-                      active={activeFeedId === feed.id}
-                      metaLabel={
-                        meta
-                          ? meta.itemCount > 0
-                            ? "Live now"
-                            : "Offline"
-                          : "—"
-                      }
-                      failed={failed}
-                      onSelect={() => setActiveFeedId(feed.id)}
-                      onRemove={() => removeFeed(feed.id)}
-                    />
-                  )
-                })}
+                <div className="mb-1 flex items-center justify-between gap-1 px-1">
+                  <p className="px-2 text-[0.65rem] font-semibold tracking-[0.16em] text-[var(--ink-faint)] uppercase">
+                    Twitch
+                  </p>
+                  <CollapseToggle
+                    open={!collapsed.navTwitch}
+                    label="Twitch feeds"
+                    onToggle={() => toggleCollapsed("navTwitch")}
+                  />
+                </div>
+                {!collapsed.navTwitch && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFeedId("twitch")}
+                      className={cn(
+                        "mb-1 w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                        activeFeedId === "twitch"
+                          ? "bg-[var(--accent-soft)] font-medium text-[var(--ink)]"
+                          : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
+                      )}
+                    >
+                      <span className="block">All live</span>
+                      <span className="block text-xs text-[var(--ink-faint)]">
+                        {liveCount === 0
+                          ? "Nobody live"
+                          : `${liveCount} live`}
+                      </span>
+                    </button>
+                    {twitchFeeds.map((feed) => {
+                      const meta = data?.sources.find((s) => s.id === feed.id)
+                      const failed = Boolean(
+                        data?.errors.find((e) => e.feedId === feed.id)
+                      )
+                      return (
+                        <FeedNavRow
+                          key={feed.id}
+                          feed={{
+                            ...feed,
+                            title: meta?.title || feed.title || feed.url,
+                          }}
+                          active={activeFeedId === feed.id}
+                          metaLabel={
+                            meta
+                              ? meta.itemCount > 0
+                                ? "Live now"
+                                : "Offline"
+                              : "—"
+                          }
+                          failed={failed}
+                          onSelect={() => setActiveFeedId(feed.id)}
+                          onRemove={() => removeFeed(feed.id)}
+                        />
+                      )
+                    })}
+                  </>
+                )}
               </div>
             )}
           </nav>
@@ -800,10 +915,17 @@ export function ReaderApp() {
 
           {showTwitchSection && (
             <div className="mb-10">
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <h3 className="font-display text-xl text-[var(--ink)]">
-                  Live on Twitch
-                </h3>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-1">
+                  <CollapseToggle
+                    open={!collapsed.riverTwitch}
+                    label="Live on Twitch"
+                    onToggle={() => toggleCollapsed("riverTwitch")}
+                  />
+                  <h3 className="font-display text-xl text-[var(--ink)]">
+                    Live on Twitch
+                  </h3>
+                </div>
                 <button
                   type="button"
                   onClick={() => setActiveFeedId("twitch")}
@@ -812,26 +934,34 @@ export function ReaderApp() {
                   View all
                 </button>
               </div>
-              {twitchLiveItems.length === 0 ? (
-                <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
-                  Nobody you follow is live right now.
-                </p>
-              ) : (
-                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                  {twitchLiveItems.map((item) => (
-                    <StoryRow key={item.id} item={item} />
-                  ))}
-                </ul>
-              )}
+              {!collapsed.riverTwitch &&
+                (twitchLiveItems.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                    Nobody you follow is live right now.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                    {twitchLiveItems.map((item) => (
+                      <StoryRow key={item.id} item={item} />
+                    ))}
+                  </ul>
+                ))}
             </div>
           )}
 
           {showYouTubeSection && (
             <div className="mb-10">
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <h3 className="font-display text-xl text-[var(--ink)]">
-                  From YouTube
-                </h3>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-1">
+                  <CollapseToggle
+                    open={!collapsed.riverYoutube}
+                    label="From YouTube"
+                    onToggle={() => toggleCollapsed("riverYoutube")}
+                  />
+                  <h3 className="font-display text-xl text-[var(--ink)]">
+                    From YouTube
+                  </h3>
+                </div>
                 <button
                   type="button"
                   onClick={() => setActiveFeedId("youtube")}
@@ -840,22 +970,28 @@ export function ReaderApp() {
                   View all
                 </button>
               </div>
-              {youtubeItems.length === 0 ? (
-                <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
-                  No recent uploads from your channels.
-                </p>
-              ) : (
-                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                  {youtubeItems.map((item) => (
-                    <StoryRow key={item.id} item={item} />
-                  ))}
-                </ul>
-              )}
+              {!collapsed.riverYoutube &&
+                (youtubeItems.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                    No recent uploads from your channels.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                    {youtubeItems.map((item) => (
+                      <StoryRow key={item.id} item={item} />
+                    ))}
+                  </ul>
+                ))}
             </div>
           )}
 
           {activeFeedId === "all" && otherItems.length > 0 && (
-            <div className="mb-3">
+            <div className="mb-3 flex items-center gap-1">
+              <CollapseToggle
+                open={!collapsed.riverOther}
+                label="Everything else"
+                onToggle={() => toggleCollapsed("riverOther")}
+              />
               <h3 className="font-display text-xl text-[var(--ink)]">
                 Everything else
               </h3>
@@ -864,7 +1000,8 @@ export function ReaderApp() {
 
           {(activeFeedId !== "all" || otherItems.length > 0) &&
             activeFeedId !== "twitch" &&
-            activeFeedId !== "youtube" && (
+            activeFeedId !== "youtube" &&
+            !(activeFeedId === "all" && collapsed.riverOther) && (
               <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
                 {riverItems.map((item) => (
                   <StoryRow key={item.id} item={item} />
