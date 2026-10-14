@@ -10,9 +10,13 @@ import {
 } from "react"
 import {
   ArrowUpRight,
+  Check,
   ChevronDown,
   ChevronRight,
+  Circle,
   Download,
+  Eye,
+  EyeOff,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -29,6 +33,13 @@ import {
   parseFeedsImport,
   serializeFeedsExport,
 } from "@/lib/import-export"
+import {
+  loadSeenIds,
+  markManySeen,
+  markSeen,
+  markUnseen,
+  saveSeenIds,
+} from "@/lib/seen"
 import { loadFeeds, makeFeedId, saveFeeds } from "@/lib/storage"
 import { formatAbsoluteTime, formatRelativeTime } from "@/lib/time"
 import { isTwitchFeedItem, isTwitchUrl } from "@/lib/twitch"
@@ -70,7 +81,17 @@ function loadCollapseState(): CollapseState {
   }
 }
 
-function StoryRow({ item }: { item: FeedItem }) {
+function StoryRow({
+  item,
+  seen,
+  onToggleSeen,
+  onOpen,
+}: {
+  item: FeedItem
+  seen: boolean
+  onToggleSeen: () => void
+  onOpen: () => void
+}) {
   const relative = formatRelativeTime(item.publishedAt)
   const absolute =
     item.publishedAt != null
@@ -79,19 +100,55 @@ function StoryRow({ item }: { item: FeedItem }) {
   const stamp = relative ?? absolute
 
   return (
-    <li className="group py-5 first:pt-4">
+    <li
+      className={cn(
+        "group flex items-start gap-2 border-b border-[var(--line)] py-5 first:pt-4 last:border-b-0",
+        seen && "opacity-60"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggleSeen}
+        className={cn(
+          "mt-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
+          seen
+            ? "text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+            : "text-[var(--ink-faint)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
+        )}
+        aria-label={seen ? "Mark as unseen" : "Mark as seen"}
+        aria-pressed={seen}
+        title={seen ? "Mark as unseen" : "Mark as seen"}
+      >
+        {seen ? <Check className="size-4" /> : <Circle className="size-4" />}
+      </button>
       <a
         href={item.link}
         target="_blank"
         rel="noopener noreferrer"
-        className="block outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        onClick={onOpen}
+        className="min-w-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs tracking-wide text-[var(--accent)] uppercase">
+            <p
+              className={cn(
+                "text-xs tracking-wide uppercase",
+                seen ? "text-[var(--ink-faint)]" : "text-[var(--accent)]"
+              )}
+            >
               {item.feedTitle}
+              {!seen ? (
+                <span className="ml-2 inline-block size-1.5 rounded-full bg-[var(--accent)] align-middle" />
+              ) : null}
             </p>
-            <h3 className="mt-1 font-display text-xl leading-snug text-[var(--ink)] transition-colors group-hover:text-[var(--accent)] sm:text-[1.35rem]">
+            <h3
+              className={cn(
+                "mt-1 font-display text-xl leading-snug transition-colors sm:text-[1.35rem]",
+                seen
+                  ? "text-[var(--ink-muted)] group-hover:text-[var(--ink)]"
+                  : "text-[var(--ink)] group-hover:text-[var(--accent)]"
+              )}
+            >
               {item.title}
             </h3>
             {item.summary ? (
@@ -254,8 +311,25 @@ export function ReaderApp() {
     index: number
   } | null>(null)
   const [collapsed, setCollapsed] = useState<CollapseState>(DEFAULT_COLLAPSE)
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => new Set())
+  const [hideSeen, setHideSeen] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
   const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function persistSeen(next: Set<string>) {
+    setSeenIds(next)
+    saveSeenIds(next)
+  }
+
+  function markItemSeen(id: string) {
+    persistSeen(markSeen(seenIds, id))
+  }
+
+  function toggleItemSeen(id: string) {
+    persistSeen(
+      seenIds.has(id) ? markUnseen(seenIds, id) : markSeen(seenIds, id)
+    )
+  }
 
   function toggleCollapsed(key: CollapseKey) {
     setCollapsed((prev) => {
@@ -287,6 +361,7 @@ export function ReaderApp() {
   useEffect(() => {
     setFeeds(loadFeeds())
     setCollapsed(loadCollapseState())
+    setSeenIds(loadSeenIds())
     setHydrated(true)
     return () => clearRestoreTimer()
   }, [])
@@ -523,6 +598,33 @@ export function ReaderApp() {
         : activeFeedId === "youtube"
           ? youtubeItems
           : items
+
+  function visible(list: FeedItem[]): FeedItem[] {
+    return hideSeen ? list.filter((item) => !seenIds.has(item.id)) : list
+  }
+
+  const visibleTwitch = visible(twitchLiveItems)
+  const visibleYoutube = visible(youtubeItems)
+  const visibleRiver = visible(riverItems)
+  const unseenInView = items.filter((item) => !seenIds.has(item.id)).length
+
+  function renderStories(list: FeedItem[]) {
+    return list.map((item) => (
+      <StoryRow
+        key={item.id}
+        item={item}
+        seen={seenIds.has(item.id)}
+        onToggleSeen={() => toggleItemSeen(item.id)}
+        onOpen={() => markItemSeen(item.id)}
+      />
+    ))
+  }
+
+  function markVisibleSeen(list: FeedItem[]) {
+    const ids = list.map((item) => item.id)
+    if (ids.length === 0) return
+    persistSeen(markManySeen(seenIds, ids))
+  }
 
   return (
     <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-5 pb-20 pt-8 sm:px-8 lg:px-10">
@@ -807,47 +909,78 @@ export function ReaderApp() {
         </aside>
 
         <section className="animate-fade-up-delay-2 min-w-0">
-          <div className="mb-4">
-            <h2 className="font-display text-2xl text-[var(--ink)]">
-              {activeFeedId === "all"
-                ? "Latest across the net"
-                : activeFeedId === "twitch"
-                  ? "Live on Twitch"
-                  : activeFeedId === "youtube"
-                    ? "From YouTube"
-                    : "From this feed"}
-            </h2>
-            <p className="mt-1 text-sm text-[var(--ink-muted)]">
-              {loading
-                ? "Fetching feeds…"
-                : activeFeedId === "twitch"
-                  ? liveCount === 0
-                    ? "Nobody you follow is live right now"
-                    : `${liveCount} live`
-                  : activeFeedId === "youtube"
-                    ? youtubeCount === 0
-                      ? "No recent uploads"
-                      : `${youtubeCount} ${
-                          youtubeCount === 1 ? "video" : "videos"
-                        }`
-                    : activeFeedId === "all"
-                      ? [
-                          `${otherItems.length} ${
-                            otherItems.length === 1 ? "story" : "stories"
-                          }`,
-                          youtubeFeeds.length > 0
-                            ? `${youtubeCount} on YouTube`
-                            : null,
-                          twitchFeeds.length > 0
-                            ? `${liveCount} live on Twitch`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      : `${items.length} ${
-                          items.length === 1 ? "story" : "stories"
-                        }`}
-            </p>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-display text-2xl text-[var(--ink)]">
+                {activeFeedId === "all"
+                  ? "Latest across the net"
+                  : activeFeedId === "twitch"
+                    ? "Live on Twitch"
+                    : activeFeedId === "youtube"
+                      ? "From YouTube"
+                      : "From this feed"}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--ink-muted)]">
+                {loading
+                  ? "Fetching feeds…"
+                  : activeFeedId === "twitch"
+                    ? liveCount === 0
+                      ? "Nobody you follow is live right now"
+                      : `${liveCount} live`
+                    : activeFeedId === "youtube"
+                      ? youtubeCount === 0
+                        ? "No recent uploads"
+                        : `${youtubeCount} ${
+                            youtubeCount === 1 ? "video" : "videos"
+                          }`
+                      : activeFeedId === "all"
+                        ? [
+                            `${otherItems.length} ${
+                              otherItems.length === 1 ? "story" : "stories"
+                            }`,
+                            youtubeFeeds.length > 0
+                              ? `${youtubeCount} on YouTube`
+                              : null,
+                            twitchFeeds.length > 0
+                              ? `${liveCount} live on Twitch`
+                              : null,
+                            `${unseenInView} unseen`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : `${items.length} ${
+                            items.length === 1 ? "story" : "stories"
+                          } · ${unseenInView} unseen`}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-[var(--line)] bg-[var(--panel)]/70"
+                onClick={() => setHideSeen((v) => !v)}
+                aria-pressed={hideSeen}
+              >
+                {hideSeen ? (
+                  <Eye className="size-3.5" />
+                ) : (
+                  <EyeOff className="size-3.5" />
+                )}
+                {hideSeen ? "Show seen" : "Hide seen"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-[var(--line)] bg-[var(--panel)]/70"
+                disabled={unseenInView === 0}
+                onClick={() => markVisibleSeen(items)}
+              >
+                <Check className="size-3.5" />
+                Mark all seen
+              </Button>
+            </div>
           </div>
 
           {data?.errors && data.errors.length > 0 && (
@@ -939,11 +1072,13 @@ export function ReaderApp() {
                   <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
                     Nobody you follow is live right now.
                   </p>
+                ) : visibleTwitch.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                    All live streams are marked seen.
+                  </p>
                 ) : (
-                  <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                    {twitchLiveItems.map((item) => (
-                      <StoryRow key={item.id} item={item} />
-                    ))}
+                  <ul className="border-t border-[var(--line)]">
+                    {renderStories(visibleTwitch)}
                   </ul>
                 ))}
             </div>
@@ -975,11 +1110,13 @@ export function ReaderApp() {
                   <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
                     No recent uploads from your channels.
                   </p>
+                ) : visibleYoutube.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                    All YouTube uploads here are marked seen.
+                  </p>
                 ) : (
-                  <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                    {youtubeItems.map((item) => (
-                      <StoryRow key={item.id} item={item} />
-                    ))}
+                  <ul className="border-t border-[var(--line)]">
+                    {renderStories(visibleYoutube)}
                   </ul>
                 ))}
             </div>
@@ -1001,13 +1138,16 @@ export function ReaderApp() {
           {(activeFeedId !== "all" || otherItems.length > 0) &&
             activeFeedId !== "twitch" &&
             activeFeedId !== "youtube" &&
-            !(activeFeedId === "all" && collapsed.riverOther) && (
-              <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                {riverItems.map((item) => (
-                  <StoryRow key={item.id} item={item} />
-                ))}
+            !(activeFeedId === "all" && collapsed.riverOther) &&
+            (visibleRiver.length > 0 ? (
+              <ul className="border-t border-[var(--line)]">
+                {renderStories(visibleRiver)}
               </ul>
-            )}
+            ) : riverItems.length > 0 && hideSeen ? (
+              <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                Everything in this section is marked seen.
+              </p>
+            ) : null)}
 
           {activeFeedId === "twitch" && (
             <>
@@ -1017,11 +1157,14 @@ export function ReaderApp() {
                   live.
                 </div>
               )}
-              {twitchLiveItems.length > 0 && (
-                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                  {twitchLiveItems.map((item) => (
-                    <StoryRow key={item.id} item={item} />
-                  ))}
+              {twitchLiveItems.length > 0 && visibleTwitch.length === 0 && (
+                <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                  All live streams are marked seen.
+                </p>
+              )}
+              {visibleTwitch.length > 0 && (
+                <ul className="border-t border-[var(--line)]">
+                  {renderStories(visibleTwitch)}
                 </ul>
               )}
             </>
@@ -1034,11 +1177,14 @@ export function ReaderApp() {
                   No recent uploads from your channels.
                 </div>
               )}
-              {youtubeItems.length > 0 && (
-                <ul className="divide-y divide-[var(--line)] border-t border-[var(--line)]">
-                  {youtubeItems.map((item) => (
-                    <StoryRow key={item.id} item={item} />
-                  ))}
+              {youtubeItems.length > 0 && visibleYoutube.length === 0 && (
+                <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
+                  All YouTube uploads here are marked seen.
+                </p>
+              )}
+              {visibleYoutube.length > 0 && (
+                <ul className="border-t border-[var(--line)]">
+                  {renderStories(visibleYoutube)}
                 </ul>
               )}
             </>

@@ -20,6 +20,7 @@ Open [http://127.0.0.1:47291](http://127.0.0.1:47291).
 - Stories are merged and sorted by publish time.
 - Starter feeds: Hacker News, BBC Technology, NASA Breaking News.
 - **Import / Export** — download your feed list as JSON, or merge a previously exported file back in.
+- **Seen** — opening a story marks it seen (stored in your browser). Toggle the circle/check, hide seen items, or mark all seen.
 
 Paste any public RSS or Atom URL (for example `https://example.com/feed.xml`) to add more.
 
