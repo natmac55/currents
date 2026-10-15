@@ -206,6 +206,71 @@ function CollapseToggle({
   )
 }
 
+function SectionHeader({
+  title,
+  open,
+  onToggle,
+  unseenCount,
+  totalCount,
+  onMarkSeen,
+  onViewAll,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  unseenCount: number
+  totalCount: number
+  onMarkSeen?: () => void
+  onViewAll?: () => void
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <CollapseToggle open={open} label={title} onToggle={onToggle} />
+        <h3 className="font-display text-xl text-[var(--ink)]">{title}</h3>
+        {totalCount > 0 ? (
+          <span
+            className={cn(
+              "ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs tabular-nums",
+              unseenCount > 0
+                ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                : "text-[var(--ink-faint)]"
+            )}
+            title={`${unseenCount} unseen of ${totalCount}`}
+          >
+            {unseenCount > 0 ? (
+              <span className="inline-block size-1.5 rounded-full bg-[var(--accent)]" />
+            ) : (
+              <Check className="size-3" />
+            )}
+            {unseenCount > 0 ? `${unseenCount} unseen` : "All seen"}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-3">
+        {onMarkSeen && unseenCount > 0 ? (
+          <button
+            type="button"
+            onClick={onMarkSeen}
+            className="text-xs font-medium tracking-wide text-[var(--ink-muted)] uppercase hover:text-[var(--accent)]"
+          >
+            Mark seen
+          </button>
+        ) : null}
+        {onViewAll ? (
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="text-xs font-medium tracking-wide text-[var(--accent)] uppercase hover:underline"
+          >
+            View all
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function FeedNavRow({
   feed,
   active,
@@ -607,6 +672,15 @@ export function ReaderApp() {
   const visibleYoutube = visible(youtubeItems)
   const visibleRiver = visible(riverItems)
   const unseenInView = items.filter((item) => !seenIds.has(item.id)).length
+  const twitchUnseen = twitchLiveItems.filter(
+    (item) => !seenIds.has(item.id)
+  ).length
+  const youtubeUnseen = youtubeItems.filter(
+    (item) => !seenIds.has(item.id)
+  ).length
+  const otherUnseen = otherItems.filter(
+    (item) => !seenIds.has(item.id)
+  ).length
 
   function renderStories(list: FeedItem[]) {
     return list.map((item) => (
@@ -1048,25 +1122,15 @@ export function ReaderApp() {
 
           {showTwitchSection && (
             <div className="mb-10">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-1">
-                  <CollapseToggle
-                    open={!collapsed.riverTwitch}
-                    label="Live on Twitch"
-                    onToggle={() => toggleCollapsed("riverTwitch")}
-                  />
-                  <h3 className="font-display text-xl text-[var(--ink)]">
-                    Live on Twitch
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveFeedId("twitch")}
-                  className="text-xs font-medium tracking-wide text-[var(--accent)] uppercase hover:underline"
-                >
-                  View all
-                </button>
-              </div>
+              <SectionHeader
+                title="Live on Twitch"
+                open={!collapsed.riverTwitch}
+                onToggle={() => toggleCollapsed("riverTwitch")}
+                unseenCount={twitchUnseen}
+                totalCount={twitchLiveItems.length}
+                onMarkSeen={() => markVisibleSeen(twitchLiveItems)}
+                onViewAll={() => setActiveFeedId("twitch")}
+              />
               {!collapsed.riverTwitch &&
                 (twitchLiveItems.length === 0 ? (
                   <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
@@ -1086,25 +1150,15 @@ export function ReaderApp() {
 
           {showYouTubeSection && (
             <div className="mb-10">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-1">
-                  <CollapseToggle
-                    open={!collapsed.riverYoutube}
-                    label="From YouTube"
-                    onToggle={() => toggleCollapsed("riverYoutube")}
-                  />
-                  <h3 className="font-display text-xl text-[var(--ink)]">
-                    From YouTube
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveFeedId("youtube")}
-                  className="text-xs font-medium tracking-wide text-[var(--accent)] uppercase hover:underline"
-                >
-                  View all
-                </button>
-              </div>
+              <SectionHeader
+                title="From YouTube"
+                open={!collapsed.riverYoutube}
+                onToggle={() => toggleCollapsed("riverYoutube")}
+                unseenCount={youtubeUnseen}
+                totalCount={youtubeItems.length}
+                onMarkSeen={() => markVisibleSeen(youtubeItems)}
+                onViewAll={() => setActiveFeedId("youtube")}
+              />
               {!collapsed.riverYoutube &&
                 (youtubeItems.length === 0 ? (
                   <p className="rounded-md border border-dashed border-[var(--line)] px-4 py-6 text-sm text-[var(--ink-muted)]">
@@ -1123,16 +1177,14 @@ export function ReaderApp() {
           )}
 
           {activeFeedId === "all" && otherItems.length > 0 && (
-            <div className="mb-3 flex items-center gap-1">
-              <CollapseToggle
-                open={!collapsed.riverOther}
-                label="Everything else"
-                onToggle={() => toggleCollapsed("riverOther")}
-              />
-              <h3 className="font-display text-xl text-[var(--ink)]">
-                Everything else
-              </h3>
-            </div>
+            <SectionHeader
+              title="Everything else"
+              open={!collapsed.riverOther}
+              onToggle={() => toggleCollapsed("riverOther")}
+              unseenCount={otherUnseen}
+              totalCount={otherItems.length}
+              onMarkSeen={() => markVisibleSeen(otherItems)}
+            />
           )}
 
           {(activeFeedId !== "all" || otherItems.length > 0) &&
