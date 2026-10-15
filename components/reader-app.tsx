@@ -236,14 +236,14 @@ function SectionHeader({
                 ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
                 : "text-[var(--ink-faint)]"
             )}
-            title={`${unseenCount} unseen of ${totalCount}`}
+            title={`${unseenCount} unseen · ${totalCount - unseenCount} seen`}
           >
             {unseenCount > 0 ? (
               <span className="inline-block size-1.5 rounded-full bg-[var(--accent)]" />
             ) : (
               <Check className="size-3" />
             )}
-            {unseenCount > 0 ? `${unseenCount} unseen` : "All seen"}
+            {formatSeenMeta(totalCount, unseenCount)}
           </span>
         ) : null}
       </div>
@@ -269,6 +269,26 @@ function SectionHeader({
       </div>
     </div>
   )
+}
+
+function countSeenUnseen(list: FeedItem[], seen: Set<string>) {
+  let unseen = 0
+  for (const item of list) {
+    if (!seen.has(item.id)) unseen++
+  }
+  return { total: list.length, unseen, seen: list.length - unseen }
+}
+
+function formatSeenMeta(
+  total: number,
+  unseen: number,
+  emptyLabel = "No items"
+) {
+  if (total === 0) return emptyLabel
+  const seen = total - unseen
+  if (unseen === 0) return `${seen} seen`
+  if (seen === 0) return `${unseen} unseen`
+  return `${unseen} unseen · ${seen} seen`
 }
 
 function FeedNavRow({
@@ -671,16 +691,21 @@ export function ReaderApp() {
   const visibleTwitch = visible(twitchLiveItems)
   const visibleYoutube = visible(youtubeItems)
   const visibleRiver = visible(riverItems)
-  const unseenInView = items.filter((item) => !seenIds.has(item.id)).length
-  const twitchUnseen = twitchLiveItems.filter(
-    (item) => !seenIds.has(item.id)
-  ).length
-  const youtubeUnseen = youtubeItems.filter(
-    (item) => !seenIds.has(item.id)
-  ).length
-  const otherUnseen = otherItems.filter(
-    (item) => !seenIds.has(item.id)
-  ).length
+  const viewCounts = countSeenUnseen(items, seenIds)
+  const twitchCounts = countSeenUnseen(twitchLiveItems, seenIds)
+  const youtubeCounts = countSeenUnseen(youtubeItems, seenIds)
+  const otherCounts = countSeenUnseen(otherItems, seenIds)
+  const allCounts = countSeenUnseen(allItems, seenIds)
+  const unseenInView = viewCounts.unseen
+  const twitchUnseen = twitchCounts.unseen
+  const youtubeUnseen = youtubeCounts.unseen
+  const otherUnseen = otherCounts.unseen
+
+  function feedSeenMeta(feedId: string, emptyLabel = "No items") {
+    const feedItems = allItems.filter((item) => item.feedId === feedId)
+    const { total, unseen } = countSeenUnseen(feedItems, seenIds)
+    return formatSeenMeta(total, unseen, emptyLabel)
+  }
 
   function renderStories(list: FeedItem[]) {
     return list.map((item) => (
@@ -832,7 +857,12 @@ export function ReaderApp() {
                   : "text-[var(--ink-muted)] hover:bg-[var(--panel)] hover:text-[var(--ink)]"
               )}
             >
-              All currents
+              <span className="block">All currents</span>
+              <span className="block text-xs text-[var(--ink-faint)]">
+                {data
+                  ? formatSeenMeta(allCounts.total, allCounts.unseen)
+                  : "—"}
+              </span>
             </button>
 
             {otherFeeds.map((feed) => {
@@ -848,7 +878,9 @@ export function ReaderApp() {
                     title: meta?.title || feed.title || feed.url,
                   }}
                   active={activeFeedId === feed.id}
-                  metaLabel={`${meta?.itemCount ?? "—"} items`}
+                  metaLabel={
+                    data ? feedSeenMeta(feed.id) : `${meta?.itemCount ?? "—"} items`
+                  }
                   failed={failed}
                   onSelect={() => setActiveFeedId(feed.id)}
                   onRemove={() => removeFeed(feed.id)}
@@ -882,9 +914,11 @@ export function ReaderApp() {
                     >
                       <span className="block">All uploads</span>
                       <span className="block text-xs text-[var(--ink-faint)]">
-                        {youtubeCount === 0
-                          ? "No videos"
-                          : `${youtubeCount} videos`}
+                        {formatSeenMeta(
+                          youtubeCounts.total,
+                          youtubeCounts.unseen,
+                          "No videos"
+                        )}
                       </span>
                     </button>
                     {youtubeFeeds.map((feed) => {
@@ -900,7 +934,11 @@ export function ReaderApp() {
                             title: meta?.title || feed.title || feed.url,
                           }}
                           active={activeFeedId === feed.id}
-                          metaLabel={`${meta?.itemCount ?? "—"} items`}
+                          metaLabel={
+                            data
+                              ? feedSeenMeta(feed.id, "No videos")
+                              : `${meta?.itemCount ?? "—"} items`
+                          }
                           failed={failed}
                           onSelect={() => setActiveFeedId(feed.id)}
                           onRemove={() => removeFeed(feed.id)}
@@ -940,7 +978,10 @@ export function ReaderApp() {
                       <span className="block text-xs text-[var(--ink-faint)]">
                         {liveCount === 0
                           ? "Nobody live"
-                          : `${liveCount} live`}
+                          : `${formatSeenMeta(
+                              twitchCounts.total,
+                              twitchCounts.unseen
+                            )} · live`}
                       </span>
                     </button>
                     {twitchFeeds.map((feed) => {
@@ -948,6 +989,16 @@ export function ReaderApp() {
                       const failed = Boolean(
                         data?.errors.find((e) => e.feedId === feed.id)
                       )
+                      const feedItems = allItems.filter(
+                        (item) => item.feedId === feed.id
+                      )
+                      const counts = countSeenUnseen(feedItems, seenIds)
+                      const liveMeta =
+                        meta == null
+                          ? "—"
+                          : meta.itemCount === 0
+                            ? "Offline"
+                            : `${formatSeenMeta(counts.total, counts.unseen)} · live`
                       return (
                         <FeedNavRow
                           key={feed.id}
@@ -956,13 +1007,7 @@ export function ReaderApp() {
                             title: meta?.title || feed.title || feed.url,
                           }}
                           active={activeFeedId === feed.id}
-                          metaLabel={
-                            meta
-                              ? meta.itemCount > 0
-                                ? "Live now"
-                                : "Offline"
-                              : "—"
-                          }
+                          metaLabel={liveMeta}
                           failed={failed}
                           onSelect={() => setActiveFeedId(feed.id)}
                           onRemove={() => removeFeed(feed.id)}
@@ -1018,13 +1063,15 @@ export function ReaderApp() {
                             twitchFeeds.length > 0
                               ? `${liveCount} live on Twitch`
                               : null,
-                            `${unseenInView} unseen`,
+                            formatSeenMeta(viewCounts.total, viewCounts.unseen),
                           ]
                             .filter(Boolean)
                             .join(" · ")
-                        : `${items.length} ${
-                            items.length === 1 ? "story" : "stories"
-                          } · ${unseenInView} unseen`}
+                        : formatSeenMeta(
+                            viewCounts.total,
+                            viewCounts.unseen,
+                            "No stories"
+                          )}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
